@@ -1,0 +1,674 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Major Pick'em - Golf Draft</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: Georgia, 'Times New Roman', serif; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState, useEffect, useMemo } = React;
+
+
+const MAJOR_WINNERS = new Set([
+  "Scottie Scheffler","Xander Schauffele","Rory McIlroy","Collin Morikawa",
+  "Wyndham Clark","Jon Rahm","Hideki Matsuyama","Shane Lowry","Brian Harman",
+  "Matt Fitzpatrick","Justin Thomas","Jordan Spieth","Brooks Koepka",
+  "Bryson DeChambeau","Dustin Johnson","Patrick Reed","Danny Willett",
+  "Jason Day","Keegan Bradley","Adam Scott","Lucas Glover","Phil Mickelson",
+  "Tiger Woods","Bubba Watson","Zach Johnson","Webb Simpson","Charl Schwartzel",
+  "Martin Kaymer","Louis Oosthuizen","Graeme McDowell","Angel Cabrera",
+  "Padraig Harrington","Trevor Immelman","Geoff Ogilvy","Michael Campbell",
+  "Vijay Singh","Ben Curtis","Mike Weir","Rich Beem","Ernie Els","David Toms",
+  "Stewart Cink","Y.E. Yang","Jimmy Walker","Jason Dufner","Justin Rose",
+  "Henrik Stenson","Sergio Garcia","Gary Woodland","Cameron Smith","Francesco Molinari"
+]);
+
+const MAJOR_VENUES = {
+  masters: { name: "The US Masters", venues: { 2024: "Augusta National Golf Club", 2025: "Augusta National Golf Club", 2026: "Augusta National Golf Club", 2027: "Augusta National Golf Club", 2028: "Augusta National Golf Club" } },
+  pga: { name: "The PGA Championship", venues: { 2024: "Valhalla Golf Club", 2025: "Quail Hollow Club", 2026: "Aronimink Golf Club", 2027: "Pecan Valley Golf Club", 2028: "TBD" } },
+  usopen: { name: "The US Open", venues: { 2024: "Pinehurst No. 2", 2025: "Oakmont Country Club", 2026: "Shinnecock Hills Golf Club", 2027: "Pebble Beach Golf Links", 2028: "TBD" } },
+  open: { name: "The Open Championship", venues: { 2024: "Royal Troon Golf Club", 2025: "Royal Portrush Golf Club", 2026: "Royal Birkdale Golf Club", 2027: "St Andrews (Old Course)", 2028: "Royal Troon Golf Club" } }
+};
+
+function getMajors(y) {
+  return Object.entries(MAJOR_VENUES).map(([id, d]) => ({ id, name: d.name, venue: d.venues[y] || "TBD" }));
+}
+
+const YEARS = [2024, 2025, 2026, 2027, 2028];
+
+const DEFAULT_RANKINGS = [
+  { name: "Scottie Scheffler", rank: 1, country: "USA" }, { name: "Rory McIlroy", rank: 2, country: "NIR" },
+  { name: "Cameron Young", rank: 3, country: "USA" }, { name: "Justin Rose", rank: 4, country: "ENG" },
+  { name: "Tommy Fleetwood", rank: 5, country: "ENG" }, { name: "Russell Henley", rank: 6, country: "USA" },
+  { name: "Matt Fitzpatrick", rank: 7, country: "ENG" }, { name: "Collin Morikawa", rank: 8, country: "USA" },
+  { name: "Xander Schauffele", rank: 9, country: "USA" }, { name: "J.J. Spaun", rank: 10, country: "USA" },
+  { name: "Chris Gotterup", rank: 11, country: "USA" }, { name: "Robert MacIntyre", rank: 12, country: "SCO" },
+  { name: "Sepp Straka", rank: 13, country: "AUT" }, { name: "Hideki Matsuyama", rank: 14, country: "JPN" },
+  { name: "Justin Thomas", rank: 15, country: "USA" }, { name: "Ben Griffin", rank: 16, country: "USA" },
+  { name: "Ludvig Åberg", rank: 17, country: "SWE" }, { name: "Jacob Bridgeman", rank: 18, country: "USA" },
+  { name: "Alex Noren", rank: 19, country: "SWE" }, { name: "Patrick Reed", rank: 20, country: "USA" },
+  { name: "Harris English", rank: 21, country: "USA" }, { name: "Viktor Hovland", rank: 22, country: "NOR" },
+  { name: "Tyrrell Hatton", rank: 23, country: "ENG" }, { name: "Akshay Bhatia", rank: 24, country: "USA" },
+  { name: "Bryson DeChambeau", rank: 25, country: "USA" }, { name: "Keegan Bradley", rank: 26, country: "USA" },
+  { name: "Min Woo Lee", rank: 27, country: "AUS" }, { name: "Sam Burns", rank: 28, country: "USA" },
+  { name: "Maverick McNealy", rank: 29, country: "USA" }, { name: "Si Woo Kim", rank: 30, country: "KOR" },
+  { name: "Jon Rahm", rank: 31, country: "ESP" }, { name: "Ryan Gerard", rank: 32, country: "USA" },
+  { name: "Patrick Cantlay", rank: 33, country: "USA" }, { name: "Shane Lowry", rank: 34, country: "IRL" },
+  { name: "Kurt Kitayama", rank: 35, country: "USA" }, { name: "Jake Knapp", rank: 36, country: "USA" },
+  { name: "Marco Penge", rank: 37, country: "ENG" }, { name: "Nicolai Højgaard", rank: 38, country: "DEN" },
+  { name: "Jason Day", rank: 39, country: "AUS" }, { name: "Daniel Berger", rank: 40, country: "USA" },
+  { name: "Aaron Rai", rank: 41, country: "ENG" }, { name: "Nicolas Echavarria", rank: 42, country: "COL" },
+  { name: "Corey Conners", rank: 43, country: "CAN" }, { name: "Michael Kim", rank: 44, country: "USA" },
+  { name: "Samuel Stevens", rank: 45, country: "USA" }, { name: "Kristoffer Reitan", rank: 46, country: "NOR" },
+  { name: "Michael Brennan", rank: 47, country: "USA" }, { name: "Matt McCarty", rank: 48, country: "USA" },
+  { name: "Gary Woodland", rank: 49, country: "USA" }, { name: "Brian Harman", rank: 50, country: "USA" },
+  { name: "Adam Scott", rank: 51, country: "AUS" }, { name: "Tony Finau", rank: 52, country: "USA" },
+  { name: "Sahith Theegala", rank: 55, country: "USA" }, { name: "Tom Kim", rank: 60, country: "KOR" },
+  { name: "Billy Horschel", rank: 62, country: "USA" }, { name: "Joaquín Niemann", rank: 68, country: "CHI" },
+  { name: "Sungjae Im", rank: 58, country: "KOR" }, { name: "Byeong Hun An", rank: 70, country: "KOR" },
+  { name: "Cameron Smith", rank: 65, country: "AUS" }, { name: "Jordan Spieth", rank: 78, country: "USA" },
+  { name: "Brooks Koepka", rank: 80, country: "USA" }, { name: "Rickie Fowler", rank: 85, country: "USA" },
+  { name: "Tom Hoge", rank: 88, country: "USA" }, { name: "Dustin Johnson", rank: 95, country: "USA" },
+  { name: "Tom McKibbin", rank: 90, country: "NIR" }, { name: "Sami Valimaki", rank: 92, country: "FIN" },
+  { name: "Andrew Novak", rank: 96, country: "USA" }, { name: "Harry Hall", rank: 100, country: "ENG" },
+  { name: "Beau Hossler", rank: 105, country: "USA" }, { name: "Casey Jarvis", rank: 110, country: "RSA" },
+  { name: "Nick Dunlap", rank: 115, country: "USA" }, { name: "Rasmus Neergaard-Petersen", rank: 120, country: "DEN" },
+  { name: "John Keefer", rank: 130, country: "USA" }, { name: "Naoyuki Kataoka", rank: 140, country: "JPN" },
+  { name: "Chris Kirk", rank: 75, country: "USA" }, { name: "Denny McCarthy", rank: 72, country: "USA" },
+];
+
+const DEFAULT_FIRST_TIMERS = [
+  "Michael Brennan", "Jacob Bridgeman", "Ethan Fang", "Ryan Gerard", "Chris Gotterup",
+  "Ben Griffin", "Harry Hall", "Jackson Herrington", "Brandon Holtz", "Mason Howell",
+  "Casey Jarvis", "Naoyuki Kataoka", "John Keefer", "Fifa Laopakdee", "Tom McKibbin",
+  "Rasmus Neergaard-Petersen", "Andrew Novak", "Marco Penge", "Mateo Pulcini",
+  "Kristoffer Reitan", "Samuel Stevens", "Sami Valimaki"
+];
+
+const DEFAULT_FT_AMATEURS = ["Ethan Fang", "Jackson Herrington", "Brandon Holtz", "Mason Howell", "Fifa Laopakdee", "Mateo Pulcini"];
+
+function buildPools(rankings, firstTimers, ftAmateurs) {
+  const info = {};
+  rankings.forEach(function(p) { info[p.name] = { rank: p.rank, country: p.country, amateur: p.amateur || false }; });
+  firstTimers.forEach(function(n) { if (!info[n]) { info[n] = { rank: 999, country: "?", amateur: ftAmateurs.has(n) }; } });
+  const top10 = rankings.filter(function(p) { return p.rank <= 10; }).map(function(p) { return p.name; });
+  const intl = rankings.filter(function(p) { return p.country !== "USA"; }).map(function(p) { return p.name; });
+  const noMajor = rankings.filter(function(p) { return !MAJOR_WINNERS.has(p.name); }).map(function(p) { return p.name; });
+  firstTimers.forEach(function(n) { if (!MAJOR_WINNERS.has(n) && !noMajor.includes(n)) { noMajor.push(n); } });
+  const all = [...new Set([...rankings.map(function(p) { return p.name; }), ...firstTimers])].sort();
+  return { info: info, top10: top10, intl: intl, noMajor: noMajor, firstTimers: firstTimers, all: all };
+}
+
+function genId() { return Math.random().toString(36).substring(2, 10) + Date.now().toString(36); }
+function snake(n, t) { const o = []; let r = 0; while (o.length < t) { if (r % 2 === 0) { for (let i = 0; i < n && o.length < t; i++) o.push(i); } else { for (let i = n - 1; i >= 0; i--) { if (o.length < t) o.push(i); } } r++; } return o; }
+function loadGames() { try { return JSON.parse(localStorage.getItem("golfPickemGames") || "{}"); } catch(e) { return {}; } }
+function saveGames(g) { localStorage.setItem("golfPickemGames", JSON.stringify(g)); }
+function fmtScore(s) { if (s === 0) return "E"; if (s > 0) return "+" + s; return "" + s; }
+function loadSavedRankings() { try { const d = JSON.parse(localStorage.getItem("golfPickemRankings")); if (d && d.rankings) return d; } catch(e) {} return null; }
+function saveSavedRankings(d) { localStorage.setItem("golfPickemRankings", JSON.stringify(d)); }
+function loadSavedFT() { try { const d = JSON.parse(localStorage.getItem("golfPickemFT")); if (d) return d; } catch(e) {} return null; }
+function saveSavedFT(d) { localStorage.setItem("golfPickemFT", JSON.stringify(d)); }
+
+const SF = { fontFamily: "'Segoe UI','Helvetica Neue',Arial,sans-serif" };
+
+function Shell({ children, showBack, onGoHome }) {
+  return (
+    <div style={{ minHeight: "100vh", background: "#f3f4f0", fontFamily: "'Georgia','Times New Roman',serif", color: "#1a1a1a" }}>
+      <div style={{ background: "linear-gradient(135deg,#2d5a3d 0%,#3a6b4a 100%)", padding: "24px 40px", color: "#fff", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div>
+          <div style={{ fontSize: 30, fontWeight: 700, cursor: "pointer" }} onClick={onGoHome}>⛳ Major Pick'em</div>
+          <div style={{ fontSize: 13, opacity: 0.8, marginTop: 2, ...SF }}>Golf Major Championship Draft</div>
+        </div>
+        {showBack && <a onClick={onGoHome} style={{ color: "#fff", textDecoration: "underline", cursor: "pointer", fontSize: 14, ...SF }}>← Back to Tournaments</a>}
+      </div>
+      <div style={{ maxWidth: 1140, margin: "0 auto", padding: "36px 24px" }}>{children}</div>
+    </div>
+  );
+}
+
+function App() {
+  const [games, setGames] = useState(loadGames);
+  const [curId, setCurId] = useState(null);
+  const [view, setView] = useState("home");
+  const [year, setYear] = useState(2026);
+  const [setupMajor, setSetupMajor] = useState(null);
+  const [numUsers, setNumUsers] = useState(2);
+  const [names, setNames] = useState(["", ""]);
+  const [setupStep, setSetupStep] = useState("count");
+  const [shareMsg, setShareMsg] = useState("");
+  const [draftSel, setDraftSel] = useState({});
+  const [delId, setDelId] = useState(null);
+  const [syncing, setSyncing] = useState(false);
+  const [syncMsg, setSyncMsg] = useState("");
+  const [showAdmin, setShowAdmin] = useState(false);
+  const [newFT, setNewFT] = useState("");
+  const [newFTAmateur, setNewFTAmateur] = useState(false);
+  const [rkState, setRkState] = useState(loadSavedRankings);
+  const [ftState, setFtState] = useState(loadSavedFT);
+
+  const rk = rkState?.rankings || DEFAULT_RANKINGS;
+  const rkDate = rkState?.date || "April 12, 2026 (built-in)";
+  const ft = ftState?.list || DEFAULT_FIRST_TIMERS;
+  const ftAm = new Set(ftState?.amateurs || DEFAULT_FT_AMATEURS);
+  const pools = useMemo(() => buildPools(rk, ft, ftAm), [rk, ft, ftAm]);
+
+  const CATS = [
+    { id: "top10_1", label: "Top 10 Pick #1", desc: "A player in the Top 10 of the official world golf rankings", pool: pools.top10 },
+    { id: "top10_2", label: "Top 10 Pick #2", desc: "A player in the Top 10 of the official world golf rankings", pool: pools.top10 },
+    { id: "international", label: "International", desc: "An international born player not in the Top 10 of the world ranking", pool: pools.intl },
+    { id: "no_major", label: "No Major Wins", desc: "A player that has never won a major", pool: pools.noMajor },
+    { id: "first_time", label: "First Timer", desc: "A player playing this major for the very first time", pool: ft },
+  ];
+  const ALT_CATS = [{ id: "alt_1", label: "Alternate #1" }, { id: "alt_2", label: "Alternate #2" }];
+
+  useEffect(() => { const h = window.location.hash; if (h.startsWith("#/share/")) { const id = h.replace("#/share/", ""); const g = loadGames(); if (g[id]) { setGames(g); setCurId(id); setView("scoreboard"); } } }, []);
+  useEffect(() => { saveGames(games); }, [games]);
+
+  const game = curId ? games[curId] : null;
+  const majors = getMajors(year);
+
+  async function syncRankings() {
+    setSyncing(true);
+    setSyncMsg("Fetching from OWGR...");
+    const owgrUrl = "https://apiweb.owgr.com/api/owgr/rankings/getRankings?regionId=0&pageSize=100&pageNumber=1&countryId=0&sortString=Rank+ASC";
+    const urls = [owgrUrl, "https://corsproxy.io/?" + encodeURIComponent(owgrUrl), "https://api.allorigins.win/raw?url=" + encodeURIComponent(owgrUrl)];
+    let data = null;
+    for (const url of urls) {
+      try {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 8000);
+        const r = await fetch(url, { signal: controller.signal });
+        clearTimeout(timer);
+        const json = await r.json();
+        if (json.rankingsList) { data = json; break; }
+      } catch (e) { /* try next */ }
+    }
+    if (!data) {
+      setSyncMsg("Cannot reach OWGR from here. This works on GitHub Pages. Built-in rankings: April 12, 2026.");
+      setSyncing(false);
+      return;
+    }
+    const nr = data.rankingsList.map(function(r) { return { name: r.player.fullName, rank: r.rank, country: r.player.country.code3 || r.player.country.name, amateur: r.player.isAmateur || false }; });
+    const ds = data.rankingsList[0]?.weekEndDate || new Date().toLocaleDateString();
+    const sv = { rankings: nr, date: ds };
+    saveSavedRankings(sv);
+    setRkState(sv);
+    setSyncMsg("Updated! " + nr.length + " players from OWGR (" + ds + ")");
+    setSyncing(false);
+  }
+
+  const [scoreSyncing, setScoreSyncing] = useState(false);
+  const [scoreSyncMsg, setScoreSyncMsg] = useState("");
+
+  async function syncScores() {
+    if (!game) return;
+    setScoreSyncing(true);
+    setScoreSyncMsg("Fetching from ESPN...");
+    const espnUrl = "https://site.api.espn.com/apis/site/v2/sports/golf/pga/scoreboard";
+    const urls = [espnUrl, "https://corsproxy.io/?" + encodeURIComponent(espnUrl), "https://api.allorigins.win/raw?url=" + encodeURIComponent(espnUrl)];
+    let data = null;
+    for (const url of urls) {
+      try {
+        const controller = new AbortController();
+        const timer = setTimeout(function() { controller.abort(); }, 8000);
+        const r = await fetch(url, { signal: controller.signal });
+        clearTimeout(timer);
+        const json = await r.json();
+        if (json.events && json.events.length > 0) { data = json; break; }
+      } catch (e) { /* try next */ }
+    }
+    if (!data) {
+      setScoreSyncMsg("Cannot reach ESPN from here. This works on GitHub Pages.");
+      setScoreSyncing(false);
+      return;
+    }
+    const ev = data.events[0];
+    const comps = ev.competitions?.[0]?.competitors || [];
+    // Build a lookup of ESPN scores by player name
+    const espnScores = {};
+    comps.forEach(function(c) {
+      const name = c.athlete?.displayName;
+      const scoreStr = c.score || "0";
+      if (name) {
+        let scoreNum = 0;
+        if (scoreStr === "E") scoreNum = 0;
+        else scoreNum = parseInt(scoreStr) || 0;
+        espnScores[name] = scoreNum;
+      }
+    });
+    // Update all players in the game (picks + alternates)
+    const newScores = { ...game.scores };
+    let matched = 0;
+    Object.keys(newScores).forEach(function(playerName) {
+      if (espnScores[playerName] !== undefined) {
+        newScores[playerName] = { ...newScores[playerName], total: espnScores[playerName] };
+        matched++;
+      }
+    });
+    upd({ scores: newScores });
+    setScoreSyncMsg("✅ Scores updated from " + ev.name + "! Matched " + matched + "/" + Object.keys(newScores).length + " players.");
+    setScoreSyncing(false);
+  }
+
+  function addFT(name, amateur) {
+    const cur = ftState || { list: [...DEFAULT_FIRST_TIMERS], amateurs: [...DEFAULT_FT_AMATEURS] };
+    if (!cur.list.includes(name)) {
+      const upd = { list: [...cur.list, name], amateurs: amateur ? [...(cur.amateurs || []), name] : (cur.amateurs || []) };
+      saveSavedFT(upd);
+      setFtState(upd);
+    }
+  }
+  function removeFT(name) {
+    const cur = ftState || { list: [...DEFAULT_FIRST_TIMERS], amateurs: [...DEFAULT_FT_AMATEURS] };
+    const upd = { list: cur.list.filter(function(n) { return n !== name; }), amateurs: (cur.amateurs || []).filter(function(n) { return n !== name; }) };
+    saveSavedFT(upd);
+    setFtState(upd);
+  }
+
+  function gamesFor(mid) { return Object.values(games).filter(function(g) { return g.majorId === mid && g.year === year; }); }
+  function goHome() { setView("home"); setCurId(null); setSetupStep("count"); setShowAdmin(false); }
+  function startSetup(mid) { setSetupMajor(mid); setNumUsers(2); setNames(["", ""]); setSetupStep("count"); setView("setup"); }
+  function createGame() {
+    const id = genId(); const major = majors.find(function(m) { return m.id === setupMajor; });
+    const g = { id: id, year: year, majorId: setupMajor, major: major, users: names.slice(0, numUsers).map(function(n) { return n.trim() || "Player"; }), picks: {}, altPicks: {}, scores: {}, cutStatus: {}, draftOrder: [], draftIndex: 0, draftComplete: false, swaps: {} };
+    const mo = snake(numUsers, numUsers * 5); const ao = snake(numUsers, numUsers * 2);
+    g.draftOrder = [...mo.map(function(u) { return { user: u, type: "main" }; }), ...ao.map(function(u) { return { user: u, type: "alt" }; })];
+    setGames(function(p) { return { ...p, [id]: g }; }); setCurId(id); setView("draft");
+  }
+  function upd(u) { setGames(function(p) { return { ...p, [curId]: { ...p[curId], ...u } }; }); }
+  function resetDraft() { if (!game) return; upd({ picks: {}, altPicks: {}, scores: {}, cutStatus: {}, draftIndex: 0, draftComplete: false, swaps: {} }); }
+  function pickedSet() { if (!game) return new Set(); const s = new Set(); Object.values(game.picks).forEach(function(up) { Object.values(up).forEach(function(p) { s.add(p); }); }); Object.values(game.altPicks).forEach(function(ua) { Object.values(ua).forEach(function(p) { s.add(p); }); }); return s; }
+  function makePick(player, catId) {
+    if (!game) return; const step = game.draftOrder[game.draftIndex]; const ui = step.user;
+    if (step.type === "main") { const up = { ...(game.picks[ui] || {}) }; up[catId] = player; const np = { ...game.picks, [ui]: up }; const ns = { ...game.scores, [player]: game.scores[player] || { total: 0 } }; const ni = game.draftIndex + 1; upd({ picks: np, scores: ns, draftIndex: ni, draftComplete: ni >= game.draftOrder.length }); }
+    else { const ua = { ...(game.altPicks[ui] || {}) }; const ak = Object.keys(ua).length === 0 ? "alt_1" : "alt_2"; ua[ak] = player; const na = { ...game.altPicks, [ui]: ua }; const ns = { ...game.scores, [player]: game.scores[player] || { total: 0 } }; const ni = game.draftIndex + 1; upd({ altPicks: na, scores: ns, draftIndex: ni, draftComplete: ni >= game.draftOrder.length }); }
+    setDraftSel({});
+  }
+  function updScore(p, v) { if (!game) return; upd({ scores: { ...game.scores, [p]: { ...game.scores[p], total: parseInt(v) || 0 } } }); }
+  function togCut(p) { if (!game) return; upd({ cutStatus: { ...game.cutStatus, [p]: !game.cutStatus[p] } }); }
+  function swapPlayer(ui, mc, ac) { if (!game) return; const np = { ...game.picks, [ui]: { ...game.picks[ui] } }; const na = { ...game.altPicks, [ui]: { ...game.altPicks[ui] } }; np[ui][mc] = na[ui][ac]; delete na[ui][ac]; upd({ picks: np, altPicks: na }); }
+  function shareGame() { if (!game) return; const url = window.location.origin + window.location.pathname + "#/share/" + curId; navigator.clipboard.writeText(url).then(function() { setShareMsg("Link copied!"); }).catch(function() { setShareMsg(url); }); setTimeout(function() { setShareMsg(""); }, 4000); }
+  function markWinner(p) { if (!game) return; const ns = { ...game.scores }; Object.keys(ns).forEach(function(k) { ns[k] = { ...ns[k], isWinner: k === p }; }); upd({ scores: ns }); }
+
+  function calcWinner() {
+    if (!game || !game.draftComplete) return null;
+    const us = game.users.map(function(_, i) { const pk = game.picks[i] || {}; let t = 0, c = 0, tw = false; Object.values(pk).forEach(function(p) { t += game.scores[p]?.total || 0; if (game.cutStatus[p]) c++; if (game.scores[p]?.isWinner) tw = true; }); return { i: i, t: t, c: c, tw: tw }; });
+    const twu = us.find(function(u) { return u.tw; }); if (twu) return twu;
+    const mc = Math.max(...us.map(function(u) { return u.c; })); const top = us.filter(function(u) { return u.c === mc; });
+    if (top.length === 1) return top[0]; top.sort(function(a, b) { return a.t - b.t; }); return top[0];
+  }
+  const winner = useMemo(calcWinner, [game?.scores, game?.cutStatus, game?.picks]);
+  function winnerText() { if (!winner) return null; const nm = game.users[winner.i]; if (winner.tw) return "🏆 " + nm + " wins — Picked the tournament winner!"; return "🏆 " + nm + " wins — Lowest cumulative score (" + fmtScore(winner.t) + ")"; }
+  function pLabel(n) { const i = pools.info[n]; if (!i) return n; let s = n; if (i.rank && i.rank < 500) s += " #" + i.rank; if (i.amateur) s += " (A)"; return s; }
+
+  const [showScoreEdit, setShowScoreEdit] = useState(false);
+
+  // ─── HOME ────────────────────────────────────────────────────────
+  if (view === "home") {
+    return (
+      <Shell onGoHome={goHome}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20, flexWrap: "wrap", gap: 16 }}>
+          <h2 style={{ margin: 0, fontSize: 26, fontWeight: 700 }}>{year} Men's Golf Majors</h2>
+          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+            <div style={{ display: "flex", border: "1px solid #ccc", borderRadius: 8, overflow: "hidden" }}>
+              {YEARS.map(function(y) { return (<button key={y} onClick={function() { setYear(y); }} style={{ padding: "8px 20px", fontSize: 14, fontWeight: 600, border: "none", cursor: "pointer", background: y === year ? "#2d5a3d" : "#fff", color: y === year ? "#fff" : "#333", borderRight: "1px solid #ccc", ...SF }}>{y}</button>); })}
+            </div>
+            <button onClick={function() { setShowAdmin(!showAdmin); }} style={{ background: "#fff", color: "#555", border: "1px solid #ccc", borderRadius: 8, padding: "8px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer", ...SF }}>⚙️ Admin</button>
+          </div>
+        </div>
+
+        {showAdmin && (
+          <div style={{ background: "#fff", border: "1px solid #ddd", borderRadius: 12, padding: 24, marginBottom: 24 }}>
+            <h3 style={{ margin: "0 0 16px", fontSize: 18, fontWeight: 700 }}>Admin Panel</h3>
+            <div style={{ marginBottom: 20, paddingBottom: 16, borderBottom: "1px solid #eee" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
+                <div>
+                  <div style={{ fontSize: 15, fontWeight: 700, ...SF }}>World Rankings</div>
+                  <div style={{ fontSize: 12, color: "#888", marginTop: 2, ...SF }}>Last updated: {rkDate} · {rk.length} players</div>
+                </div>
+                <button onClick={syncRankings} disabled={syncing} style={{ background: "#2d5a3d", color: "#fff", border: "none", borderRadius: 8, padding: "8px 20px", fontSize: 13, fontWeight: 600, cursor: syncing ? "not-allowed" : "pointer", opacity: syncing ? 0.6 : 1, ...SF }}>
+                  {syncing ? "Syncing..." : "⚡ Sync from OWGR"}
+                </button>
+              </div>
+              {syncMsg && <div style={{ marginTop: 8, fontSize: 12, color: syncMsg.includes("Updated") ? "#2d5a3d" : "#c0392b", ...SF }}>{syncMsg}</div>}
+            </div>
+            <div>
+              <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 8, ...SF }}>First Timers ({ft.length})</div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 12 }}>
+                {ft.map(function(n) { return (
+                  <span key={n} style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "#f0f0ee", borderRadius: 20, padding: "4px 12px", fontSize: 13, ...SF }}>
+                    {n}{ftAm.has(n) && <span style={{ color: "#b8860b", fontWeight: 600 }}>(A)</span>}
+                    <button onClick={function() { removeFT(n); }} style={{ background: "none", border: "none", cursor: "pointer", color: "#c0392b", fontSize: 14, padding: 0, lineHeight: 1 }}>×</button>
+                  </span>
+                ); })}
+              </div>
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <input value={newFT} onChange={function(e) { setNewFT(e.target.value); }} placeholder="Add player name..." style={{ flex: 1, padding: "8px 12px", borderRadius: 8, border: "1px solid #ccc", fontSize: 14, ...SF }} />
+                <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 13, ...SF }}>
+                  <input type="checkbox" checked={newFTAmateur} onChange={function(e) { setNewFTAmateur(e.target.checked); }} />Amateur
+                </label>
+                <button onClick={function() { if (newFT.trim()) { addFT(newFT.trim(), newFTAmateur); setNewFT(""); setNewFTAmateur(false); } }} style={{ background: "#2d5a3d", color: "#fff", border: "none", borderRadius: 8, padding: "8px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer", ...SF }}>Add</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(480px,1fr))", gap: 24 }}>
+          {majors.map(function(m) {
+            const mg = gamesFor(m.id);
+            return (
+              <div key={m.id} style={{ background: "#fff", border: "1px solid #ddd", borderRadius: 12, padding: 24 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                  <div><div style={{ fontSize: 20, fontWeight: 700 }}>{m.name}</div><div style={{ fontSize: 14, color: "#777", marginTop: 2, ...SF }}>{m.venue}</div></div>
+                  <button onClick={function() { startSetup(m.id); }} style={{ background: "#2d5a3d", color: "#fff", border: "none", borderRadius: 8, padding: "8px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer", ...SF }}>+ New Game</button>
+                </div>
+                <div style={{ marginTop: 14 }}>
+                  {mg.length === 0 ? <div style={{ color: "#aaa", fontSize: 14, ...SF }}>No games started</div> :
+                    mg.map(function(g) {
+                      return (
+                        <div key={g.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: delId === g.id ? "#fef2f2" : "#f8f8f6", borderRadius: 8, padding: "10px 16px", marginTop: 8, ...SF }}>
+                          <span style={{ fontSize: 14, fontWeight: 500, cursor: "pointer", flex: 1 }} onClick={function() { if (delId !== g.id) { setCurId(g.id); setView(g.draftComplete ? "scoreboard" : "draft"); } }}>{g.users.join(", ")}</span>
+                          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                            {delId === g.id ? (
+                              <>
+                                <span style={{ fontSize: 12, color: "#c0392b", fontWeight: 600 }}>Delete?</span>
+                                <button onClick={function() { setGames(function(p) { const n = { ...p }; delete n[g.id]; return n; }); setDelId(null); }} style={{ background: "#c0392b", color: "#fff", border: "none", borderRadius: 6, padding: "4px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Yes</button>
+                                <button onClick={function() { setDelId(null); }} style={{ background: "#eee", color: "#333", border: "none", borderRadius: 6, padding: "4px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>No</button>
+                              </>
+                            ) : (
+                              <>
+                                <span style={{ fontSize: 12, fontWeight: 600, background: g.draftComplete ? "#e8f0ea" : "#fef3cd", color: g.draftComplete ? "#2d5a3d" : "#856404", padding: "3px 12px", borderRadius: 12 }}>{g.draftComplete ? "Complete" : "Drafting"}</span>
+                                <button onClick={function(e) { e.stopPropagation(); setDelId(g.id); }} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 16, color: "#ccc", padding: "2px 6px" }}>✕</button>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </Shell>
+    );
+  }
+
+  // ─── SETUP ───────────────────────────────────────────────────────
+  if (view === "setup") {
+    const major = majors.find(function(m) { return m.id === setupMajor; });
+    return (
+      <Shell showBack onGoHome={goHome}>
+        <div style={{ maxWidth: 560, margin: "0 auto" }}>
+          <div style={{ background: "#fff", border: "1px solid #ddd", borderRadius: 12, padding: 36 }}>
+            <h2 style={{ margin: "0 0 4px", fontSize: 24, fontWeight: 700 }}>{major?.name} {year}</h2>
+            <p style={{ color: "#777", fontSize: 14, margin: "0 0 20px", ...SF }}>{major?.venue}</p>
+            {setupStep === "count" ? (
+              <>
+                <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 16, ...SF }}>How many users are playing?</div>
+                <div style={{ display: "flex", alignItems: "center", marginBottom: 28 }}>
+                  <button onClick={function() { setNumUsers(Math.max(2, numUsers - 1)); }} style={{ width: 44, height: 44, fontSize: 20, border: "1px solid #ccc", borderRadius: "8px 0 0 8px", background: "#f5f5f0", cursor: "pointer", fontWeight: 700, ...SF }}>−</button>
+                  <div style={{ width: 52, height: 44, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, fontWeight: 700, borderTop: "1px solid #ccc", borderBottom: "1px solid #ccc", ...SF }}>{numUsers}</div>
+                  <button onClick={function() { setNumUsers(Math.min(6, numUsers + 1)); }} style={{ width: 44, height: 44, fontSize: 20, border: "1px solid #ccc", borderRadius: "0 8px 8px 0", background: "#f5f5f0", cursor: "pointer", fontWeight: 700, ...SF }}>+</button>
+                </div>
+                <button onClick={function() { setNames(Array.from({ length: numUsers }, function() { return ""; })); setSetupStep("names"); }} style={{ width: "100%", padding: "14px", fontSize: 16, fontWeight: 700, background: "#2d5a3d", color: "#fff", border: "none", borderRadius: 10, cursor: "pointer", ...SF }}>Next: Enter Names</button>
+              </>
+            ) : (
+              <>
+                <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 16, ...SF }}>Enter player names</div>
+                {Array.from({ length: numUsers }).map(function(_, i) {
+                  return (
+                    <div key={"nm-" + i} style={{ marginBottom: 14 }}>
+                      <label style={{ fontSize: 13, color: "#777", display: "block", marginBottom: 4, fontWeight: 600, ...SF }}>Player {i + 1}</label>
+                      <input value={names[i] || ""} onChange={function(e) { const v = e.target.value; setNames(function(p) { const n = [...p]; n[i] = v; return n; }); }} placeholder={"Player " + (i + 1)} style={{ width: "100%", padding: "10px 14px", borderRadius: 8, border: "1px solid #ccc", fontSize: 14, boxSizing: "border-box", ...SF }} />
+                    </div>
+                  );
+                })}
+                <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
+                  <button onClick={function() { setSetupStep("count"); }} style={{ flex: 1, padding: "14px", fontSize: 15, fontWeight: 600, background: "#f5f5f0", border: "1px solid #ccc", borderRadius: 10, cursor: "pointer", ...SF }}>Back</button>
+                  <button onClick={createGame} disabled={names.slice(0, numUsers).some(function(n) { return !n.trim(); })} style={{ flex: 2, padding: "14px", fontSize: 16, fontWeight: 700, background: "#2d5a3d", color: "#fff", border: "none", borderRadius: 10, cursor: "pointer", opacity: names.slice(0, numUsers).some(function(n) { return !n.trim(); }) ? 0.5 : 1, ...SF }}>Start Draft</button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      </Shell>
+    );
+  }
+
+  // ─── DRAFT ───────────────────────────────────────────────────────
+  if (view === "draft" && game) {
+    const step = game.draftOrder[game.draftIndex];
+    const picked = pickedSet();
+    const ui = step?.user;
+    const uname = game.users[ui];
+    const isAlt = step?.type === "alt";
+    const uPicks = game.picks[ui] || {};
+    const uAlts = game.altPicks[ui] || {};
+    const avail = isAlt ? ALT_CATS.filter(function(c) { return !Object.keys(uAlts).includes(c.id); }) : CATS.filter(function(c) { return !Object.keys(uPicks).includes(c.id); });
+    const pickNum = isAlt ? (Object.keys(uAlts).length + 1) : (Object.keys(uPicks).length + 1);
+    const pickTotal = isAlt ? 2 : 5;
+
+    return (
+      <Shell showBack onGoHome={goHome}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 28, flexWrap: "wrap", gap: 12 }}>
+          <h2 style={{ margin: 0, fontSize: 24, fontWeight: 700 }}>{game.major.name} {game.year} — Draft</h2>
+          <button onClick={resetDraft} style={{ background: "#e74c3c", color: "#fff", border: "none", borderRadius: 8, padding: "8px 20px", fontSize: 14, fontWeight: 600, cursor: "pointer", ...SF }}>Reset Draft</button>
+        </div>
+        {game.draftComplete ? (
+          <div style={{ background: "#fff", border: "1px solid #ddd", borderRadius: 12, padding: 48, textAlign: "center" }}>
+            <div style={{ fontSize: 48, marginBottom: 12 }}>🏌️</div>
+            <h3 style={{ fontSize: 24, fontWeight: 700, color: "#2d5a3d", margin: "0 0 20px" }}>Draft Complete!</h3>
+            <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap", ...SF }}>
+              <button onClick={function() { setView("scoreboard"); }} style={{ background: "#2d5a3d", color: "#fff", border: "none", borderRadius: 8, padding: "12px 28px", fontSize: 15, fontWeight: 600, cursor: "pointer" }}>View Scoreboard</button>
+              <button onClick={shareGame} style={{ background: "#fff", color: "#333", border: "1px solid #ccc", borderRadius: 8, padding: "12px 28px", fontSize: 15, fontWeight: 600, cursor: "pointer" }}>Share Game Link</button>
+            </div>
+            {shareMsg && <p style={{ color: "#2d5a3d", marginTop: 12, fontSize: 13, ...SF }}>{shareMsg}</p>}
+          </div>
+        ) : (
+          <>
+            <div style={{ background: "#fff", border: "1px solid #ddd", borderRadius: 12, padding: "18px 24px", marginBottom: 20 }}>
+              <span style={{ color: "#2d5a3d", fontWeight: 700, fontSize: 18 }}>{uname}</span>
+              <span style={{ fontSize: 16, ...SF }}> — Pick {pickNum} of {pickTotal}{isAlt ? " (Alternate)" : ""}</span>
+              <div style={{ color: "#999", fontSize: 13, marginTop: 4, ...SF }}>Select a category and player below</div>
+            </div>
+            {avail.map(function(cat) {
+              const poolRaw = isAlt ? pools.all.filter(function(p) { return !picked.has(p); }) : (cat.pool || []).filter(function(p) { return !picked.has(p); });
+              const pool = [...poolRaw].sort(function(a, b) { return (pools.info[a]?.rank || 999) - (pools.info[b]?.rank || 999); });
+              return (
+                <div key={cat.id} style={{ background: "#fff", border: "1px solid #ddd", borderRadius: 12, padding: "18px 24px", marginBottom: 12, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
+                  <div style={{ flex: 1, minWidth: 200 }}>
+                    <div style={{ fontSize: 16, fontWeight: 700, ...SF }}>{cat.label}</div>
+                    {cat.desc && <div style={{ fontSize: 13, color: "#888", marginTop: 2, ...SF }}>{cat.desc}</div>}
+                  </div>
+                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                    <select value={draftSel[cat.id] || ""} onChange={function(e) { setDraftSel(function(p) { return { ...p, [cat.id]: e.target.value }; }); }} style={{ padding: "8px 12px", borderRadius: 8, border: "1px solid #ccc", fontSize: 14, minWidth: 180, cursor: "pointer", ...SF }}>
+                      <option value="">Select player...</option>
+                      {pool.map(function(p) { return <option key={p} value={p}>{pLabel(p)}</option>; })}
+                    </select>
+                    <button onClick={function() { if (draftSel[cat.id]) makePick(draftSel[cat.id], cat.id); }} disabled={!draftSel[cat.id]} style={{ background: draftSel[cat.id] ? "#2d5a3d" : "#ccc", color: "#fff", border: "none", borderRadius: 8, padding: "8px 18px", fontSize: 14, fontWeight: 600, cursor: draftSel[cat.id] ? "pointer" : "not-allowed", ...SF }}>Pick</button>
+                  </div>
+                </div>
+              );
+            })}
+            <h3 style={{ fontSize: 20, fontWeight: 700, marginTop: 32, marginBottom: 16 }}>Teams</h3>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(300px,1fr))", gap: 16 }}>
+              {game.users.map(function(u, uIdx) {
+                const pk = game.picks[uIdx] || {}; const al = game.altPicks[uIdx] || {};
+                const has = Object.keys(pk).length > 0 || Object.keys(al).length > 0;
+                return (
+                  <div key={uIdx} style={{ background: "#fff", border: "1px solid #ddd", borderRadius: 12, padding: 20 }}>
+                    <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 8 }}>{u}</div>
+                    {!has ? <div style={{ color: "#aaa", fontSize: 14, ...SF }}>No picks yet</div> : (
+                      <div style={{ ...SF }}>
+                        {Object.entries(pk).map(function([cid, p]) { const ct = CATS.find(function(c) { return c.id === cid; }); return <div key={cid} style={{ fontSize: 13, padding: "3px 0", display: "flex", justifyContent: "space-between" }}><span>{p}</span><span style={{ color: "#999" }}>{ct?.label}</span></div>; })}
+                        {Object.entries(al).map(function([aid, p]) { return <div key={aid} style={{ fontSize: 13, padding: "3px 0", color: "#b8860b" }}>{p} (alt)</div>; })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        )}
+      </Shell>
+    );
+  }
+
+  // ─── SCOREBOARD ──────────────────────────────────────────────────
+  if (view === "scoreboard" && game) {
+    const wt = winnerText();
+    return (
+      <Shell showBack onGoHome={goHome}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24, flexWrap: "wrap", gap: 12 }}>
+          <div>
+            <h2 style={{ margin: 0, fontSize: 24, fontWeight: 700 }}>{game.major.name} {game.year} — Scoreboard</h2>
+            <p style={{ color: "#777", fontSize: 14, margin: "4px 0 0", ...SF }}>{game.major.venue}</p>
+          </div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", ...SF }}>
+            <button onClick={syncScores} disabled={scoreSyncing} style={{ background: "#2d5a3d", color: "#fff", border: "none", borderRadius: 8, padding: "8px 18px", fontSize: 13, fontWeight: 600, cursor: scoreSyncing ? "not-allowed" : "pointer", opacity: scoreSyncing ? 0.6 : 1 }}>{scoreSyncing ? "Syncing..." : "⚡ Sync Scores"}</button>
+            <button onClick={function() { setShowScoreEdit(!showScoreEdit); }} style={{ background: "#fff", color: "#333", border: "1px solid #ccc", borderRadius: 8, padding: "8px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Update Scores</button>
+            <button onClick={shareGame} style={{ background: "#fff", color: "#333", border: "1px solid #ccc", borderRadius: 8, padding: "8px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Share Link</button>
+            <button onClick={function() { setView("draft"); }} style={{ background: "#fff", color: "#333", border: "1px solid #ccc", borderRadius: 8, padding: "8px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>View Draft</button>
+            <button onClick={resetDraft} style={{ background: "#c0392b", color: "#fff", border: "none", borderRadius: 8, padding: "8px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Reset</button>
+          </div>
+        </div>
+        {shareMsg && <p style={{ color: "#2d5a3d", fontSize: 13, marginBottom: 8, textAlign: "right", ...SF }}>{shareMsg}</p>}
+        {scoreSyncMsg && <p style={{ color: scoreSyncMsg.includes("✅") ? "#2d5a3d" : "#c0392b", fontSize: 13, marginBottom: 8, textAlign: "right", ...SF }}>{scoreSyncMsg}</p>}
+        {wt && <div style={{ background: "#2d5a3d", color: "#fff", borderRadius: 12, padding: "16px 24px", textAlign: "center", fontSize: 18, fontWeight: 700, marginBottom: 24, ...SF }}>{wt}</div>}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(480px,1fr))", gap: 20 }}>
+          {game.users.map(function(user, uIdx) {
+            const pk = game.picks[uIdx] || {}; const al = game.altPicks[uIdx] || {};
+            let tt = 0, cc = 0;
+            Object.values(pk).forEach(function(p) { tt += game.scores[p]?.total || 0; if (game.cutStatus[p]) cc++; });
+            const isW = winner?.i === uIdx;
+            return (
+              <div key={uIdx} style={{ background: "#fff", border: isW ? "2px solid #c9a836" : "1px solid #ddd", borderRadius: 12, position: "relative", overflow: "visible" }}>
+                {isW && <div style={{ position: "absolute", top: -14, left: 20, background: "#2d5a3d", color: "#fff", padding: "4px 16px", borderRadius: 8, fontSize: 13, fontWeight: 700, ...SF }}>🏆 Winner</div>}
+                <div style={{ padding: "24px 24px 0" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
+                    <div style={{ fontSize: 22, fontWeight: 700 }}>{user}</div>
+                    <div style={{ textAlign: "right" }}>
+                      <div style={{ fontSize: 28, fontWeight: 700, color: isW ? "#c9a836" : "#2d5a3d", ...SF }}>{fmtScore(tt)}</div>
+                      <div style={{ fontSize: 12, color: "#999", ...SF }}>{cc}/{Object.keys(pk).length} made cut</div>
+                    </div>
+                  </div>
+                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14, ...SF }}>
+                    <thead><tr style={{ borderBottom: "1px solid #eee" }}>
+                      <th style={{ textAlign: "left", padding: "6px 4px", fontWeight: 600, fontSize: 12, color: "#999" }}>Player</th>
+                      <th style={{ textAlign: "left", padding: "6px 4px", fontWeight: 600, fontSize: 12, color: "#999" }}>Category</th>
+                      <th style={{ textAlign: "center", padding: "6px 4px", fontWeight: 600, fontSize: 12, color: "#999" }}>Score</th>
+                      <th style={{ textAlign: "center", padding: "6px 4px", fontWeight: 600, fontSize: 12, color: "#999" }}>Cut</th>
+                      <th style={{ textAlign: "right", padding: "6px 4px", fontWeight: 600, fontSize: 12, color: "#999" }}>Sub</th>
+                    </tr></thead>
+                    <tbody>
+                      {CATS.map(function(cat) {
+                        const player = pk[cat.id]; if (!player) return null;
+                        const sc = game.scores[player]?.total || 0;
+                        const cut = game.cutStatus[player] || false;
+                        return (
+                          <tr key={cat.id} style={{ borderBottom: "1px solid #f5f5f0" }}>
+                            <td style={{ padding: "10px 4px", fontWeight: 600 }}>{player}</td>
+                            <td style={{ padding: "10px 4px", color: "#888", fontSize: 13 }}>{cat.label}</td>
+                            <td style={{ textAlign: "center", padding: "10px 4px", fontWeight: 600, color: sc < 0 ? "#2d5a3d" : sc > 0 ? "#c0392b" : "#333" }}>{fmtScore(sc)}</td>
+                            <td style={{ textAlign: "center", padding: "10px 4px" }}>{cut ? <span style={{ color: "#2d5a3d", fontWeight: 700 }}>✓</span> : <span style={{ color: "#ccc" }}>—</span>}</td>
+                            <td style={{ textAlign: "right", padding: "10px 4px" }}>
+                              <select onChange={function(e) { if (e.target.value) swapPlayer(uIdx, cat.id, e.target.value); }} style={{ padding: "4px 8px", borderRadius: 6, border: "1px solid #ccc", background: "#e8f0ea", color: "#2d5a3d", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+                                <option value="">Swap</option>
+                                {Object.entries(al).map(function([aid, p]) { return <option key={aid} value={aid}>↔ {p}</option>; })}
+                              </select>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                  {Object.keys(al).length > 0 && (
+                    <div style={{ marginTop: 14, paddingTop: 10, borderTop: "1px solid #eee", paddingBottom: 20 }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: "#999", marginBottom: 8 }}>Alternates <span style={{ fontWeight: 400 }}>(not counted in team score)</span></div>
+                      {Object.entries(al).map(function([aid, player]) {
+                        const sc = game.scores[player]?.total || 0;
+                        const cut = game.cutStatus[player] || false;
+                        return (
+                          <div key={aid} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 4px", fontSize: 14 }}>
+                            <span>{player}</span>
+                            <div style={{ display: "flex", gap: 20, alignItems: "center" }}>
+                              <span style={{ fontWeight: 600, color: sc < 0 ? "#2d5a3d" : sc > 0 ? "#c0392b" : "#333" }}>{fmtScore(sc)}</span>
+                              <span>{cut ? <span style={{ color: "#2d5a3d", fontWeight: 700 }}>✓</span> : <span style={{ color: "#ccc" }}>—</span>}</span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                  {Object.keys(al).length === 0 && <div style={{ paddingBottom: 20 }} />}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        {showScoreEdit && (
+        <div style={{ marginTop: 32, background: "#fff", border: "1px solid #ddd", borderRadius: 12, padding: 24 }}>
+          <h3 style={{ fontSize: 18, fontWeight: 700, marginTop: 0, marginBottom: 16 }}>Edit Scores & Status</h3>
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14, ...SF }}>
+              <thead><tr style={{ borderBottom: "2px solid #eee" }}>
+                <th style={{ textAlign: "left", padding: 8, fontWeight: 600, fontSize: 12, color: "#999" }}>Player</th>
+                <th style={{ textAlign: "center", padding: 8, fontWeight: 600, fontSize: 12, color: "#999" }}>Score</th>
+                <th style={{ textAlign: "center", padding: 8, fontWeight: 600, fontSize: 12, color: "#999" }}>Made Cut</th>
+                <th style={{ textAlign: "center", padding: 8, fontWeight: 600, fontSize: 12, color: "#999" }}>Tournament Winner</th>
+              </tr></thead>
+              <tbody>
+                {Object.keys(game.scores).sort().map(function(player) {
+                  const sc = game.scores[player]?.total || 0;
+                  const cut = game.cutStatus[player] || false;
+                  const tw = game.scores[player]?.isWinner || false;
+                  return (
+                    <tr key={player} style={{ borderBottom: "1px solid #f5f5f0" }}>
+                      <td style={{ padding: 8, fontWeight: 500 }}>{player}</td>
+                      <td style={{ textAlign: "center", padding: 8 }}><input type="number" value={sc} onChange={function(e) { updScore(player, e.target.value); }} style={{ width: 70, textAlign: "center", padding: 6, borderRadius: 6, border: "1px solid #ccc", fontSize: 14, ...SF }} /></td>
+                      <td style={{ textAlign: "center", padding: 8 }}><input type="checkbox" checked={cut} onChange={function() { togCut(player); }} style={{ cursor: "pointer", width: 18, height: 18 }} /></td>
+                      <td style={{ textAlign: "center", padding: 8 }}><input type="radio" name={"tw-" + game.id} checked={tw} onChange={function() { markWinner(player); }} style={{ cursor: "pointer", width: 18, height: 18 }} /></td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+        )}
+        <div style={{ marginTop: 32, background: "#fff", border: "1px solid #ddd", borderRadius: 12, padding: 24, ...SF }}>
+          <h3 style={{ fontSize: 18, fontWeight: 700, marginTop: 0, marginBottom: 12 }}>Winning Rules</h3>
+          <div style={{ color: "#777", fontSize: 14, lineHeight: 1.7 }}>
+            · Picking the tournament winner automatically wins the pick'em<br />
+            · If no one picks the winner, lowest cumulative team score wins<br />
+            · If scores are tied, most players making the 36-hole cut breaks the tie
+          </div>
+        </div>
+      </Shell>
+    );
+  }
+
+  return (
+    <Shell onGoHome={goHome}>
+      <div style={{ textAlign: "center", padding: 40 }}>
+        <p>Something went wrong.</p>
+        <button onClick={goHome} style={{ background: "#2d5a3d", color: "#fff", border: "none", borderRadius: 8, padding: "10px 24px", fontSize: 14, cursor: "pointer", ...SF }}>Go Home</button>
+      </div>
+    </Shell>
+  );
+}
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>

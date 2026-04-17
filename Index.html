@@ -33,10 +33,18 @@ const MAJOR_WINNERS = new Set([
 ]);
 
 const MAJOR_VENUES = {
-  masters: { name: "The US Masters", venues: { 2024: "Augusta National Golf Club", 2025: "Augusta National Golf Club", 2026: "Augusta National Golf Club", 2027: "Augusta National Golf Club", 2028: "Augusta National Golf Club" } },
-  pga: { name: "The PGA Championship", venues: { 2024: "Valhalla Golf Club", 2025: "Quail Hollow Club", 2026: "Aronimink Golf Club", 2027: "Pecan Valley Golf Club", 2028: "TBD" } },
-  usopen: { name: "The US Open", venues: { 2024: "Pinehurst No. 2", 2025: "Oakmont Country Club", 2026: "Shinnecock Hills Golf Club", 2027: "Pebble Beach Golf Links", 2028: "TBD" } },
-  open: { name: "The Open Championship", venues: { 2024: "Royal Troon Golf Club", 2025: "Royal Portrush Golf Club", 2026: "Royal Birkdale Golf Club", 2027: "St Andrews (Old Course)", 2028: "Royal Troon Golf Club" } }
+  masters: { name: "The US Masters", espnName: "Masters", venues: { 2024: "Augusta National Golf Club", 2025: "Augusta National Golf Club", 2026: "Augusta National Golf Club", 2027: "Augusta National Golf Club", 2028: "Augusta National Golf Club" } },
+  pga: { name: "The PGA Championship", espnName: "PGA Championship", venues: { 2024: "Valhalla Golf Club", 2025: "Quail Hollow Club", 2026: "Aronimink Golf Club", 2027: "Pecan Valley Golf Club", 2028: "TBD" } },
+  usopen: { name: "The US Open", espnName: "U.S. Open", venues: { 2024: "Pinehurst No. 2", 2025: "Oakmont Country Club", 2026: "Shinnecock Hills Golf Club", 2027: "Pebble Beach Golf Links", 2028: "TBD" } },
+  open: { name: "The Open Championship", espnName: "Open Championship", venues: { 2024: "Royal Troon Golf Club", 2025: "Royal Portrush Golf Club", 2026: "Royal Birkdale Golf Club", 2027: "St Andrews (Old Course)", 2028: "Royal Troon Golf Club" } }
+};
+
+// ESPN date ranges for majors by year (month range to search for the tournament)
+const MAJOR_ESPN_DATES = {
+  masters: { 2024: "20240401-20240415", 2025: "20250401-20250415", 2026: "20260401-20260415", 2027: "20270401-20270415", 2028: "20280401-20280415" },
+  pga: { 2024: "20240501-20240525", 2025: "20250501-20250525", 2026: "20260501-20260525", 2027: "20270501-20270525", 2028: "20280501-20280525" },
+  usopen: { 2024: "20240601-20240625", 2025: "20250601-20250625", 2026: "20260601-20260625", 2027: "20270601-20270625", 2028: "20280601-20280625" },
+  open: { 2024: "20240701-20240725", 2025: "20250701-20250725", 2026: "20260701-20260725", 2027: "20270701-20270725", 2028: "20280701-20280725" },
 };
 
 function getMajors(y) {
@@ -213,67 +221,93 @@ function App() {
     if (!game) return;
     setScoreSyncing(true);
     setScoreSyncMsg("Fetching from ESPN...");
-    const espnUrl = "https://site.api.espn.com/apis/site/v2/sports/golf/pga/scoreboard";
-    const urls = [espnUrl, "https://corsproxy.io/?" + encodeURIComponent(espnUrl), "https://api.allorigins.win/raw?url=" + encodeURIComponent(espnUrl)];
-    let data = null;
-    for (const url of urls) {
+
+    // Map our major IDs to ESPN tournament name keywords
+    var majorKeywords = {
+      masters: "Masters",
+      pga: "PGA Championship",
+      usopen: "U.S. Open",
+      open: "Open Championship"
+    };
+    var keyword = majorKeywords[game.majorId] || game.major?.name || "";
+
+    // Fetch the full season schedule for the game's year — this includes all events with scores
+    var espnUrl = "https://site.api.espn.com/apis/site/v2/sports/golf/pga/scoreboard?dates=" + game.year;
+    var urls = [espnUrl, "https://corsproxy.io/?" + encodeURIComponent(espnUrl), "https://api.allorigins.win/raw?url=" + encodeURIComponent(espnUrl)];
+    var data = null;
+    for (var u = 0; u < urls.length; u++) {
       try {
-        const controller = new AbortController();
-        const timer = setTimeout(function() { controller.abort(); }, 8000);
-        const r = await fetch(url, { signal: controller.signal });
+        var controller = new AbortController();
+        var timer = setTimeout(function() { controller.abort(); }, 12000);
+        var r = await fetch(urls[u], { signal: controller.signal });
         clearTimeout(timer);
-        const json = await r.json();
+        var json = await r.json();
         if (json.events && json.events.length > 0) { data = json; break; }
       } catch (e) { /* try next */ }
     }
     if (!data) {
-      setScoreSyncMsg("Cannot reach ESPN from here. This works on GitHub Pages.");
+      setScoreSyncMsg("Cannot reach ESPN. This works on GitHub Pages.");
       setScoreSyncing(false);
       return;
     }
-    const ev = data.events[0];
-    const comps = ev.competitions?.[0]?.competitors || [];
-    // Build a lookup of ESPN data by player name
-    const espnData = {};
+
+    // Find the matching major tournament in the season events
+    var ev = null;
+    for (var i = 0; i < data.events.length; i++) {
+      var evName = data.events[i].name || "";
+      if (evName.toLowerCase().includes(keyword.toLowerCase())) {
+        ev = data.events[i];
+        break;
+      }
+    }
+    if (!ev) {
+      setScoreSyncMsg("Could not find " + keyword + " " + game.year + " in ESPN data. Found: " + data.events.map(function(e) { return e.name; }).slice(0, 5).join(", ") + "...");
+      setScoreSyncing(false);
+      return;
+    }
+
+    var comps = ev.competitions?.[0]?.competitors || [];
+    if (comps.length === 0) {
+      setScoreSyncMsg("Found " + ev.name + " but no player scores available yet.");
+      setScoreSyncing(false);
+      return;
+    }
+
+    // Build ESPN data lookup by player name
+    var espnData = {};
     comps.forEach(function(c) {
-      const name = c.athlete?.displayName;
-      const scoreStr = c.score || "0";
+      var name = c.athlete?.displayName;
+      var scoreStr = c.score || "0";
       if (name) {
-        let scoreNum = 0;
+        var scoreNum = 0;
         if (scoreStr === "E") scoreNum = 0;
         else scoreNum = parseInt(scoreStr) || 0;
-        const rounds = c.linescores?.length || 0;
-        const statusName = c.status?.type?.name || "";
-        // Cut logic: made cut if 3+ rounds played, or status is not "STATUS_CUT"/"CUT"
-        // Missed cut if exactly 2 rounds and status contains "cut", or status is "STATUS_CUT"
-        const missedCut = statusName.toLowerCase().includes("cut") || (rounds === 2 && comps.some(function(x) { return (x.linescores?.length || 0) > 2; }));
-        const madeCut = rounds > 2 || (rounds === 2 && !missedCut);
+        var rounds = c.linescores?.length || 0;
+        var statusName = (c.status?.type?.name || "").toLowerCase();
+        var missedCut = statusName.includes("cut") || (rounds === 2 && comps.some(function(x) { return (x.linescores?.length || 0) > 2; }));
+        var madeCut = rounds > 2;
         espnData[name] = { score: scoreNum, rounds: rounds, madeCut: madeCut, missedCut: missedCut };
       }
     });
-    // Determine if the tournament is past the cut (any player has 3+ rounds)
-    const pastCut = comps.some(function(c) { return (c.linescores?.length || 0) > 2; });
-    // Update all players in the game (picks + alternates)
-    const newScores = { ...game.scores };
-    const newCutStatus = { ...game.cutStatus };
-    let matched = 0;
+
+    var pastCut = comps.some(function(c) { return (c.linescores?.length || 0) > 2; });
+
+    // Update all players in the game
+    var newScores = { ...game.scores };
+    var newCutStatus = { ...game.cutStatus };
+    var matched = 0;
     Object.keys(newScores).forEach(function(playerName) {
       if (espnData[playerName] !== undefined) {
         newScores[playerName] = { ...newScores[playerName], total: espnData[playerName].score };
         matched++;
-        // Auto-update cut status if tournament is past the cut
         if (pastCut) {
-          if (espnData[playerName].missedCut) {
-            newCutStatus[playerName] = false;
-          } else if (espnData[playerName].madeCut) {
-            newCutStatus[playerName] = true;
-          }
+          newCutStatus[playerName] = espnData[playerName].madeCut;
         }
       }
     });
     upd({ scores: newScores, cutStatus: newCutStatus });
     var cutMsg = pastCut ? " Cut status updated." : "";
-    setScoreSyncMsg("✅ Scores updated from " + ev.name + "! Matched " + matched + "/" + Object.keys(newScores).length + " players." + cutMsg);
+    setScoreSyncMsg("✅ " + ev.name + " scores synced! " + matched + "/" + Object.keys(newScores).length + " players matched." + cutMsg);
     setScoreSyncing(false);
   }
 

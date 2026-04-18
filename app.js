@@ -190,10 +190,14 @@
     const field = (game.fieldOverride && game.fieldOverride.length)
       ? game.fieldOverride
       : buildDefaultField();
-    // Enrich with admin overrides for winners and first timers
-    const firstTimerList = (game.firstTimerOverride
-                             || (FIRST_TIMERS[game.majorId]?.[game.year] || []))
-                             .map(normalizeName);
+    // When the field entries carry an ESPN-derived isFirstTimer boolean we
+    // treat that as authoritative (history-based).  Otherwise we fall back
+    // to the hardcoded seed list per major/year.
+    const fieldHasFirstTimerFlag = field.some(p => typeof p.isFirstTimer === "boolean");
+    const seedFirstTimers = (FIRST_TIMERS[game.majorId]?.[game.year] || []).map(normalizeName);
+    const adminFirstTimerOverride = game.firstTimerOverride
+      ? game.firstTimerOverride.map(normalizeName)
+      : null;
     const noMajorOverride = (game.noMajorOverride || []).map(normalizeName);
 
     // Collect already-picked names
@@ -212,12 +216,25 @@
     for (const p of field) {
       if (taken.has(normalizeName(p.name))) continue;
 
+      // Priority for first-timer detection:
+      //  1. Explicit admin override (if set, it is the complete list)
+      //  2. ESPN history-based flag attached to the field entry
+      //  3. Seed list baked into data.js
+      let isFirstTimer;
+      if (adminFirstTimerOverride) {
+        isFirstTimer = adminFirstTimerOverride.includes(normalizeName(p.name));
+      } else if (typeof p.isFirstTimer === "boolean" && fieldHasFirstTimerFlag) {
+        isFirstTimer = p.isFirstTimer;
+      } else {
+        isFirstTimer = seedFirstTimers.includes(normalizeName(p.name));
+      }
+
       const pInfo = {
         name: p.name,
         country: p.country || getCountry(p.name) || "",
         rank: p.rank || getRanking(p.name) || 999,
         wonMajor: typeof p.wonMajor === "boolean" ? p.wonMajor : hasWonMajor(p.name),
-        isFirstTimer: firstTimerList.includes(normalizeName(p.name))
+        isFirstTimer
       };
 
       // Alternates = full field (no criteria other than uniqueness)
@@ -556,7 +573,18 @@
     const venue = VENUES[game.majorId]?.[game.year];
     const main = el("main");
 
-    // Header with reset
+    // Kick off the tournament-field fetch from ESPN the first time we
+    // enter the draft screen for this game.  ensureFieldLoaded guards
+    // against duplicate work, and updates game.fieldStatus to drive the
+    // banner below.  If a previous attempt errored out we stop here —
+    // the user can retry via the Refresh Field button to avoid a loop.
+    if (!game.fieldOverride
+        && !(game.fieldStatus && game.fieldStatus.loading)
+        && !(game.fieldStatus && game.fieldStatus.error)) {
+      ensureFieldLoaded(game);
+    }
+
+    // Header with reset + refresh field
     main.appendChild(el("div", {class:"topbar"},
       el("div", {},
         el("h2", {class:"page-title"}, `${major.name} ${game.year} — Draft`),
@@ -564,6 +592,18 @@
       ),
       el("div", {class:"row-space"},
         el("a", {href:"#", class:"btn btn-ghost btn-small"}, "← Back to Tournaments"),
+        el("button", {
+          class:"btn btn-outline btn-small",
+          title:"Re-fetch the official field and first-timer list from ESPN",
+          onclick: async () => {
+            // Force re-fetch of field + history
+            game.fieldOverride = null;
+            game.fieldStatus = { message: "Refreshing field from ESPN…", error:false, loading:true };
+            saveGames(Games);
+            render();
+            await ensureFieldLoaded(game, {forceRefresh:true});
+          }
+        }, "↻ Refresh Field"),
         el("button", {
           class:"btn btn-danger btn-small",
           onclick: () => {
@@ -578,6 +618,13 @@
         }, "Reset Draft")
       )
     ));
+
+    // Field-loading status banner
+    if (game.fieldStatus && game.fieldStatus.message) {
+      main.appendChild(el("div", {
+        class: "sync-status" + (game.fieldStatus.error ? " error" : "")
+      }, game.fieldStatus.message));
+    }
 
     const totalPrimary = game.users.length * CATEGORIES.length;
     const totalAlt     = game.users.length * 2;
@@ -1149,30 +1196,70 @@
 
   // Look up the ESPN event for our major/year.
   async function fetchEspnEvent(game) {
-    const major = MAJORS[game.majorId];
+    const id = await findEventIdForYear(game.majorId, game.year);
+    return id ? { id } : null;
+  }
 
-    // 1. Prefer cached event id in data.js
-    if (major.espnEventIds?.[game.year]) {
-      return { id: major.espnEventIds[game.year] };
+  // Find the ESPN event id for a given major in a given year.
+  // Uses a cached table first, then searches the scoreboard by month-range.
+  // Results are cached in localStorage so subsequent lookups are free.
+  const EVENT_ID_CACHE_KEY = "mp_event_ids";
+  let EventIdCache = (() => {
+    try { return JSON.parse(localStorage.getItem(EVENT_ID_CACHE_KEY)) || {}; }
+    catch { return {}; }
+  })();
+  function saveEventIdCache() {
+    localStorage.setItem(EVENT_ID_CACHE_KEY, JSON.stringify(EventIdCache));
+  }
+
+  async function findEventIdForYear(majorId, year) {
+    const cacheKey = `${majorId}_${year}`;
+    if (EventIdCache[cacheKey]) return EventIdCache[cacheKey];
+
+    const major = MAJORS[majorId];
+    if (major.espnEventIds?.[year]) {
+      EventIdCache[cacheKey] = major.espnEventIds[year];
+      saveEventIdCache();
+      return major.espnEventIds[year];
     }
 
-    // 2. Search scoreboard by date range around the scheduled start
-    const venue = VENUES[game.majorId][game.year];
-    const start = venue?.startDate
-      ? venue.startDate.replace(/-/g,"")
-      : `${game.year}0101`;
-    const url = `https://site.api.espn.com/apis/site/v2/sports/golf/pga/scoreboard?dates=${start}`;
-    const res = await fetch(url);
-    if (!res.ok) throw new Error(`ESPN scoreboard HTTP ${res.status}`);
-    const data = await res.json();
-    const events = data.events || [];
-    const target = major.name.toLowerCase();
-    const hit = events.find(e =>
-      (e.name || "").toLowerCase().includes(major.shortName.toLowerCase())
-      || (e.shortName || "").toLowerCase().includes(major.shortName.toLowerCase())
-      || (e.name || "").toLowerCase().includes(target.replace(/^the /,""))
-    );
-    if (hit) return { id: hit.id };
+    // Month guesses per major.  PGA moved from August to May in 2019.
+    const monthGuesses = {
+      masters: ["04"],
+      pga:     year >= 2019 ? ["05"] : ["08"],
+      usopen:  ["06"],
+      open:    ["07"]
+    };
+    const months = monthGuesses[majorId] || ["01","02","03","04","05","06","07","08","09","10","11","12"];
+
+    const nameMatch = (e) => {
+      const name = (e.name || "").toLowerCase();
+      const sName = (e.shortName || "").toLowerCase();
+      const short = major.shortName.toLowerCase();
+      if (majorId === "masters") return name.includes("masters") || sName.includes("masters");
+      if (majorId === "pga")     return name.includes("pga championship") || sName.includes("pga championship");
+      if (majorId === "usopen")  return (name.includes("u.s. open") || name.includes("us open") || sName.includes("us open")) && !name.includes("women") && !name.includes("senior");
+      if (majorId === "open")    return (name.includes("open championship") || name === "the open" || sName.includes("open championship")) && !name.includes("women") && !name.includes("senior") && !name.includes("u.s.") && !name.includes("us open");
+      return name.includes(short);
+    };
+
+    for (const mm of months) {
+      const start = `${year}${mm}01`;
+      const end   = `${year}${mm}31`;
+      try {
+        const url = `https://site.api.espn.com/apis/site/v2/sports/golf/pga/scoreboard?dates=${start}-${end}`;
+        const res = await fetch(url);
+        if (!res.ok) continue;
+        const data = await res.json();
+        const events = data.events || [];
+        const hit = events.find(nameMatch);
+        if (hit) {
+          EventIdCache[cacheKey] = hit.id;
+          saveEventIdCache();
+          return hit.id;
+        }
+      } catch { /* try next month */ }
+    }
     return null;
   }
 
@@ -1181,6 +1268,232 @@
     const res = await fetch(url);
     if (!res.ok) throw new Error(`ESPN leaderboard HTTP ${res.status}`);
     return res.json();
+  }
+
+  // -----------------------------------------------------------------
+  // Tournament-field loader
+  //
+  // Returns an array of { name, country, rank, wonMajor, athleteId }
+  // for the actual competitors in the major/year.  Uses ESPN's event
+  // competitors array.  If the event hasn't been announced yet (common
+  // for future years until tournament week), returns null.
+  // -----------------------------------------------------------------
+  const FIELD_CACHE_KEY = "mp_field_cache";
+  let FieldCache = (() => {
+    try { return JSON.parse(localStorage.getItem(FIELD_CACHE_KEY)) || {}; }
+    catch { return {}; }
+  })();
+  function saveFieldCache() {
+    localStorage.setItem(FIELD_CACHE_KEY, JSON.stringify(FieldCache));
+  }
+
+  async function loadTournamentField(majorId, year, {forceRefresh=false} = {}) {
+    const cacheKey = `${majorId}_${year}`;
+    if (!forceRefresh && FieldCache[cacheKey]) return FieldCache[cacheKey];
+
+    const eventId = await findEventIdForYear(majorId, year);
+    if (!eventId) throw new Error(
+      `No ${MAJORS[majorId].name} event found on ESPN for ${year}. ` +
+      `Fields for future majors are typically published the week of the tournament.`);
+
+    const url = `https://site.api.espn.com/apis/site/v2/sports/golf/pga/leaderboard?event=${eventId}`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`ESPN leaderboard HTTP ${res.status}`);
+    const data = await res.json();
+
+    const comps = data?.events?.[0]?.competitions?.[0]?.competitors || [];
+    if (!comps.length) throw new Error("ESPN returned no competitors for this event yet.");
+
+    const field = comps.map(c => {
+      const ath = c.athlete || {};
+      const name = ath.displayName || ath.fullName || ath.name || "";
+      // Country: ESPN flag.abbreviation is usually an ISO-2 code (e.g. "us",
+      // "gb-sct"). Normalize to our 3-letter ABR table when possible.
+      const flagAbbr = (ath.flag?.abbreviation || "").toLowerCase();
+      const country = espnFlagToCountry(flagAbbr) || getCountry(name) || "";
+      // Try to extract OWGR rank from any stats block (ESPN sometimes
+      // exposes "world_ranking" or "owgrrank").  Otherwise fall back.
+      let rank = extractRankFromCompetitor(c) || getRanking(name) || 999;
+      return {
+        name,
+        country,
+        rank,
+        wonMajor: hasWonMajor(name),
+        athleteId: ath.id || null
+      };
+    }).filter(p => p.name);
+
+    const result = { field, eventId, fetchedAt: new Date().toISOString() };
+    FieldCache[cacheKey] = result;
+    saveFieldCache();
+    return result;
+  }
+
+  function extractRankFromCompetitor(c) {
+    const ath = c.athlete || {};
+    // Some ESPN payloads expose a top-level number
+    if (typeof ath.worldRanking === "number") return ath.worldRanking;
+    if (typeof ath.owgrRank === "number")    return ath.owgrRank;
+    // Scan statistics[] for a rank entry
+    const stats = c.statistics || ath.statistics || [];
+    for (const s of stats) {
+      const nm = (s.name || s.abbreviation || "").toLowerCase();
+      if (nm.includes("world") || nm.includes("owgr")) {
+        const v = parseInt(s.value || s.displayValue, 10);
+        if (!isNaN(v) && v > 0) return v;
+      }
+    }
+    return null;
+  }
+
+  // Map ESPN's flag abbreviation (lowercase ISO-2 / region) to our 3-letter code
+  const ESPN_FLAG_MAP = {
+    us:"USA", usa:"USA",
+    gb:"ENG", "gb-eng":"ENG", eng:"ENG",
+    "gb-sct":"SCO", sct:"SCO",
+    "gb-wls":"WAL", wls:"WAL",
+    "gb-nir":"NIR", nir:"NIR",
+    ie:"IRL", irl:"IRL",
+    au:"AUS", aus:"AUS",
+    za:"RSA", rsa:"RSA",
+    no:"NOR", nor:"NOR",
+    se:"SWE", swe:"SWE",
+    dk:"DEN", den:"DEN",
+    fi:"FIN", fin:"FIN",
+    fr:"FRA", fra:"FRA",
+    es:"ESP", esp:"ESP",
+    de:"GER", ger:"GER",
+    jp:"JPN", jpn:"JPN",
+    kr:"KOR", kor:"KOR",
+    ca:"CAN", can:"CAN",
+    at:"AUT", aut:"AUT",
+    be:"BEL", bel:"BEL",
+    cl:"CHI", chi:"CHI",
+    tw:"TPE", tpe:"TPE",
+    ve:"VEN", ven:"VEN",
+    mx:"MEX", mex:"MEX",
+    ar:"ARG", arg:"ARG",
+    it:"ITA", ita:"ITA",
+    nz:"NZL", nzl:"NZL",
+    pl:"POL", pol:"POL",
+    pr:"PUR", pur:"PUR",
+    co:"COL", col:"COL",
+    fj:"FIJ", fij:"FIJ",
+    cn:"CHN", chn:"CHN",
+    th:"THA", tha:"THA",
+    my:"MAS", mas:"MAS",
+    zw:"ZIM", zim:"ZIM",
+    nl:"NED", ned:"NED",
+    is:"ISL", isl:"ISL"
+  };
+  function espnFlagToCountry(abbr) {
+    if (!abbr) return null;
+    return ESPN_FLAG_MAP[abbr] || abbr.toUpperCase();
+  }
+
+  // -----------------------------------------------------------------
+  // First-timer detection.
+  // For a given major, gather every athlete-id that has appeared in
+  // any previous year of that major over a 15-year window, and cache
+  // the result.  Anyone in the current field whose id is absent is a
+  // first-timer.
+  // -----------------------------------------------------------------
+  const HISTORY_CACHE_KEY = "mp_history_cache";
+  let HistoryCache = (() => {
+    try { return JSON.parse(localStorage.getItem(HISTORY_CACHE_KEY)) || {}; }
+    catch { return {}; }
+  })();
+  function saveHistoryCache() {
+    localStorage.setItem(HISTORY_CACHE_KEY, JSON.stringify(HistoryCache));
+  }
+
+  async function loadMajorHistory(majorId, upToYear, years = 15) {
+    const cacheKey = `${majorId}_upto_${upToYear}`;
+    if (HistoryCache[cacheKey]) return HistoryCache[cacheKey];
+
+    const startYear = upToYear - years;
+    const endYear   = upToYear;  // exclusive
+    const ids    = new Set();
+    const names  = new Set();
+
+    // Fetch each year in parallel for speed
+    const promises = [];
+    for (let y = startYear; y < endYear; y++) {
+      promises.push((async () => {
+        try {
+          const eventId = await findEventIdForYear(majorId, y);
+          if (!eventId) return;
+          const url = `https://site.api.espn.com/apis/site/v2/sports/golf/pga/leaderboard?event=${eventId}`;
+          const res = await fetch(url);
+          if (!res.ok) return;
+          const data = await res.json();
+          const comps = data?.events?.[0]?.competitions?.[0]?.competitors || [];
+          for (const c of comps) {
+            if (c.athlete?.id) ids.add(String(c.athlete.id));
+            const n = c.athlete?.displayName || c.athlete?.fullName;
+            if (n) names.add(normalizeName(n));
+          }
+        } catch {}
+      })());
+    }
+    await Promise.all(promises);
+
+    const result = {
+      athleteIds: [...ids],
+      normalizedNames: [...names],
+      coveredYears: [startYear, endYear - 1]
+    };
+    HistoryCache[cacheKey] = result;
+    saveHistoryCache();
+    return result;
+  }
+
+  async function markFirstTimers(majorId, year, field) {
+    const hist = await loadMajorHistory(majorId, year);
+    const idSet = new Set(hist.athleteIds);
+    const nmSet = new Set(hist.normalizedNames);
+    return field.map(p => ({
+      ...p,
+      isFirstTimer: !(p.athleteId && idSet.has(String(p.athleteId)))
+                    && !nmSet.has(normalizeName(p.name))
+    }));
+  }
+
+  // Orchestrator used by the draft screen.  Fetches the real field,
+  // computes first-timer flags, stores everything in game.fieldOverride,
+  // and saves.  Shows progress via game.fieldStatus.
+  async function ensureFieldLoaded(game, {forceRefresh=false} = {}) {
+    if (game.fieldOverride && game.fieldOverride.length && !forceRefresh) {
+      return game.fieldOverride;
+    }
+    // Mark loading synchronously so re-entrant renderDraft calls skip
+    // kicking off another fetch, but do NOT call render() here — the
+    // caller already rendered, and calling render() synchronously would
+    // re-enter renderDraft mid-way.
+    game.fieldStatus = { message: "Loading tournament field from ESPN…", error:false, loading:true };
+    try {
+      const { field } = await loadTournamentField(game.majorId, game.year, {forceRefresh});
+      game.fieldStatus = { message: `Field loaded (${field.length} players). Checking first-timers…`, error:false, loading:true };
+      render();
+      const withFT = await markFirstTimers(game.majorId, game.year, field);
+      game.fieldOverride = withFT;
+      const ftCount = withFT.filter(p => p.isFirstTimer).length;
+      game.fieldStatus = {
+        message: `${MAJORS[game.majorId].shortName} ${game.year} field: ${withFT.length} players loaded from ESPN. ${ftCount} first-timers detected.`,
+        error:false, loading:false
+      };
+      saveGames(Games);
+    } catch (err) {
+      console.error(err);
+      game.fieldStatus = {
+        message: "Could not load tournament field from ESPN: " + err.message +
+                 " — using a default player list. Use 'Refresh Field' once the field is published.",
+        error:true, loading:false
+      };
+      saveGames(Games);
+    }
+    render();
+    return game.fieldOverride;
   }
 
   // Pull a flat list of {name, score, madeCut, position} from ESPN JSON
@@ -1321,13 +1634,39 @@
     card.appendChild(el("p", {class:"subtle"}, "Maintenance actions for this browser."));
 
     card.appendChild(el("div", {class:"mt-16"},
-      el("button", {class:"btn btn-primary", onclick: async () => {
-        card.appendChild(el("div", {class:"sync-status mt-12"}, "Refreshing rankings from ESPN…"));
-        const ok = await tryRefreshRankings();
-        alert(ok ? "Rankings refreshed — ranks are now cached in your browser." :
-                   "Could not refresh rankings – the built-in snapshot is still in use.");
-        render();
+      el("button", {class:"btn btn-primary", onclick: async (ev) => {
+        const btn = ev.currentTarget;
+        btn.disabled = true;
+        const statusBox = el("div", {class:"sync-status mt-12"}, "Refreshing rankings from ESPN…");
+        card.appendChild(statusBox);
+        const result = await tryRefreshRankings();
+        btn.disabled = false;
+        if (result.ok) {
+          statusBox.textContent = `Rankings refreshed — ${result.count} players cached from ${result.source}.`;
+          statusBox.classList.remove("error");
+        } else {
+          statusBox.textContent = result.error;
+          statusBox.classList.add("error");
+        }
       }}, "Refresh World Rankings from ESPN"),
+      " ",
+      el("button", {class:"btn btn-outline", onclick: async () => {
+        // Also clear the tournament-field cache, which is what most
+        // people actually want when lists are stale.
+        try {
+          localStorage.removeItem("mp_field_cache");
+          localStorage.removeItem("mp_history_cache");
+          localStorage.removeItem("mp_event_ids");
+          FieldCache = {}; HistoryCache = {}; EventIdCache = {};
+          // Also clear per-game field overrides so next draft visit re-fetches
+          for (const g of Object.values(Games)) {
+            g.fieldOverride = null;
+            g.fieldStatus   = null;
+          }
+          saveGames(Games);
+        } catch {}
+        alert("Tournament field & history caches cleared. Open any draft screen to re-fetch the latest field from ESPN.");
+      }}, "Clear Field Cache"),
       " ",
       el("button", {class:"btn btn-outline", onclick: () => {
         if (!confirm("Delete all games from this browser?")) return;
@@ -1364,34 +1703,85 @@
     root.appendChild(main);
   }
 
-  async function tryRefreshRankings() {
-    // Best-effort: ESPN provides a rankings endpoint at times.  If this
-    // fails, the hardcoded RANKINGS table is used.
-    try {
-      const url = "https://site.api.espn.com/apis/site/v2/sports/golf/pga/rankings";
-      const res = await fetch(url);
-      if (!res.ok) return false;
-      const data = await res.json();
-      const list = data?.rankings?.[0]?.ranks || data?.ranks || [];
-      if (!list.length) return false;
-      const snapshot = list.map(r => ({
-        rank: r.current || r.rank,
-        name: r.athlete?.displayName || r.competitor?.displayName || r.name,
-        country: r.athlete?.flag?.abbreviation || r.competitor?.flag?.abbreviation || "USA"
-      })).filter(r => r.name && r.rank);
-      if (!snapshot.length) return false;
-      localStorage.setItem(RANK_KEY, JSON.stringify(snapshot));
-      // Merge into RANKINGS for the current session
-      for (const s of snapshot) {
-        const idx = GolfData.RANKINGS.findIndex(p => normalizeName(p.name) === normalizeName(s.name));
-        if (idx >= 0) GolfData.RANKINGS[idx].rank = s.rank;
-        else GolfData.RANKINGS.push(s);
+  // Parse any of the ESPN rankings response shapes we've observed into
+  // a flat [{rank,name,country}] snapshot.  Returns [] if nothing found.
+  function parseRankingsPayload(data) {
+    const out = [];
+    const pushEntry = (r) => {
+      if (!r) return;
+      const rank = r.current ?? r.rank ?? r.position ?? r.worldRanking;
+      const name = r.athlete?.displayName || r.competitor?.displayName ||
+                   r.athlete?.fullName    || r.competitor?.fullName ||
+                   r.displayName          || r.name;
+      const flag = r.athlete?.flag?.abbreviation ||
+                   r.competitor?.flag?.abbreviation ||
+                   r.flag?.abbreviation || null;
+      if (!name || !rank || isNaN(+rank)) return;
+      const country = espnFlagToCountry((flag || "").toLowerCase()) ||
+                      (flag ? flag.toUpperCase() : "") || "USA";
+      out.push({ rank: +rank, name, country });
+    };
+
+    if (Array.isArray(data?.rankings)) {
+      for (const rk of data.rankings) {
+        const lists = [rk.ranks, rk.athletes, rk.competitors, rk.players];
+        for (const list of lists) {
+          if (Array.isArray(list)) for (const r of list) pushEntry(r);
+        }
       }
-      return true;
-    } catch (e) {
-      console.error("rankings refresh", e);
-      return false;
     }
+    for (const key of ["ranks","athletes","competitors","players","items"]) {
+      const list = data?.[key];
+      if (Array.isArray(list)) for (const r of list) pushEntry(r);
+    }
+    return out;
+  }
+
+  async function tryRefreshRankings() {
+    // Try several known ESPN rankings endpoints; report exactly which
+    // one succeeded or why each failed.  Returns { ok, count?, source?, error? }
+    const endpoints = [
+      "https://site.api.espn.com/apis/site/v2/sports/golf/pga/rankings",
+      "https://site.api.espn.com/apis/site/v2/sports/golf/rankings",
+      "https://site.web.api.espn.com/apis/site/v3/sports/golf/pga/rankings",
+      "https://site.api.espn.com/apis/site/v2/sports/golf/pga/rankings?type=owgr"
+    ];
+    const errors = [];
+    for (const url of endpoints) {
+      try {
+        const res = await fetch(url);
+        if (!res.ok) { errors.push(`${url} → HTTP ${res.status}`); continue; }
+        const data = await res.json();
+        const snapshot = parseRankingsPayload(data);
+        if (!snapshot.length) {
+          errors.push(`${url} → response had no ranking entries this tool recognises`);
+          continue;
+        }
+        // De-duplicate by normalized name, keep the best (lowest) rank
+        const byName = new Map();
+        for (const s of snapshot) {
+          const key = normalizeName(s.name);
+          if (!byName.has(key) || byName.get(key).rank > s.rank) byName.set(key, s);
+        }
+        const dedup = [...byName.values()].sort((a,b) => a.rank - b.rank);
+        localStorage.setItem(RANK_KEY, JSON.stringify(dedup));
+        for (const s of dedup) {
+          const idx = GolfData.RANKINGS.findIndex(p => normalizeName(p.name) === normalizeName(s.name));
+          if (idx >= 0) GolfData.RANKINGS[idx].rank = s.rank;
+          else GolfData.RANKINGS.push(s);
+        }
+        return { ok:true, count: dedup.length, source: url };
+      } catch (e) {
+        errors.push(`${url} → ${e.message}`);
+      }
+    }
+    console.error("rankings refresh failed", errors);
+    return {
+      ok: false,
+      error: "None of the ESPN ranking endpoints responded with parseable data. " +
+             "This can happen when ESPN temporarily reshapes their API. " +
+             "The built-in snapshot remains in use. Details: " + errors.join(" | ")
+    };
   }
 
   // On startup: merge cached rankings if present

@@ -1,0 +1,654 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Major Pick'em - Golf Draft</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⛳</text></svg>">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
+
+  <script type="text/babel">
+
+/* ═══════════════════════════════════════════════════════════════════
+   MAJOR WINNERS - comprehensive list used for "Never Won a Major"
+   ═══════════════════════════════════════════════════════════════════ */
+const MAJOR_WINNERS = new Set([
+  "Scottie Scheffler","Jon Rahm","Hideki Matsuyama","Dustin Johnson","Tiger Woods",
+  "Patrick Reed","Sergio Garcia","Danny Willett","Jordan Spieth","Bubba Watson",
+  "Adam Scott","Charl Schwartzel","Phil Mickelson","Angel Cabrera","Zach Johnson",
+  "Mike Weir","Vijay Singh","Jose Maria Olazabal","Mark O'Meara","Ben Crenshaw",
+  "Bernhard Langer","Fred Couples","Sandy Lyle","Larry Mize","Jack Nicklaus",
+  "Seve Ballesteros","Craig Stadler","Tom Watson","Fuzzy Zoeller","Gary Player",
+  "Raymond Floyd","Billy Casper","Arnold Palmer","Gene Sarazen","Sam Snead",
+  "Byron Nelson","Ben Hogan","Jimmy Demaret","Horton Smith","Henry Picard",
+  "Xander Schauffele","Brooks Koepka","Justin Thomas","Collin Morikawa",
+  "Jimmy Walker","Jason Day","Rory McIlroy","Jason Dufner","Keegan Bradley",
+  "Martin Kaymer","Y.E. Yang","Padraig Harrington","Rich Beem","David Toms",
+  "Davis Love III","Steve Elkington","Nick Price","Paul Azinger","John Daly",
+  "Wayne Grady","Payne Stewart","Jeff Sluman","Larry Nelson","Bob Tway",
+  "Hubert Green","Lee Trevino","Lanny Wadkins","Dave Stockton","Julius Boros",
+  "Al Geiberger","Don January","Bobby Nichols","Dow Finsterwald","Walter Hagen",
+  "Wyndham Clark","Matt Fitzpatrick","Bryson DeChambeau","Gary Woodland",
+  "Shane Lowry","Francesco Molinari","Graeme McDowell","Lucas Glover",
+  "Michael Campbell","Retief Goosen","Jim Furyk","Ernie Els","Lee Janzen",
+  "Corey Pavin","Tom Kite","Hale Irwin","Curtis Strange","Scott Simpson",
+  "Andy North","David Graham","Jerry Pate","Johnny Miller","Tony Lema",
+  "Brian Harman","Cameron Smith","Henrik Stenson","Darren Clarke","Louis Oosthuizen",
+  "Stewart Cink","Todd Hamilton","Ben Curtis","David Duval","Paul Lawrie",
+  "Justin Leonard","Tom Lehman","Mark Calcavecchia","Nick Faldo","Ian Baker-Finch",
+  "Bill Rogers","Roberto De Vicenzo","Peter Thomson","Bob Charles","Henry Cotton",
+  "Justin Rose","Webb Simpson",
+]);
+
+/* ═══════════════════════════════════════════════════════════════════
+   TOURNAMENT DATA
+   ═══════════════════════════════════════════════════════════════════ */
+const MAJORS_INFO = {
+  masters: { name: "The US Masters" },
+  pga: { name: "The PGA Championship" },
+  usopen: { name: "The US Open" },
+  open: { name: "The Open Championship" },
+};
+
+const VENUES = {
+  2024: { masters: "Augusta National Golf Club", pga: "Valhalla Golf Club", usopen: "Pinehurst No. 2", open: "Royal Troon" },
+  2025: { masters: "Augusta National Golf Club", pga: "Quail Hollow Club", usopen: "Oakmont Country Club", open: "Royal Portrush Golf Club" },
+  2026: { masters: "Augusta National Golf Club", pga: "Aronimink Golf Club", usopen: "Shinnecock Hills Golf Club", open: "Royal Birkdale Golf Club" },
+  2027: { masters: "Augusta National Golf Club", pga: "Bethpage Black", usopen: "Pebble Beach Golf Links", open: "St Andrews (Old Course)" },
+  2028: { masters: "Augusta National Golf Club", pga: "TBD", usopen: "TBD", open: "Royal Troon" },
+};
+const YEARS = [2024, 2025, 2026, 2027, 2028];
+
+/* ═══════════════════════════════════════════════════════════════════
+   CURRENT OWGR RANKINGS — Week 15, April 12, 2026
+   Source: https://www.owgr.com/current-world-ranking
+   ═══════════════════════════════════════════════════════════════════ */
+function getFullField() {
+  return [
+    { name: "Scottie Scheffler", owgr: 1, country: "USA" },
+    { name: "Rory McIlroy", owgr: 2, country: "Northern Ireland" },
+    { name: "Cameron Young", owgr: 3, country: "USA" },
+    { name: "Justin Rose", owgr: 4, country: "England" },
+    { name: "Tommy Fleetwood", owgr: 5, country: "England" },
+    { name: "Russell Henley", owgr: 6, country: "USA" },
+    { name: "Matt Fitzpatrick", owgr: 7, country: "England" },
+    { name: "Collin Morikawa", owgr: 8, country: "USA" },
+    { name: "Xander Schauffele", owgr: 9, country: "USA" },
+    { name: "J.J. Spaun", owgr: 10, country: "USA" },
+    { name: "Chris Gotterup", owgr: 11, country: "USA" },
+    { name: "Robert MacIntyre", owgr: 12, country: "Scotland" },
+    { name: "Sepp Straka", owgr: 13, country: "Austria" },
+    { name: "Hideki Matsuyama", owgr: 14, country: "Japan" },
+    { name: "Justin Thomas", owgr: 15, country: "USA" },
+    { name: "Ben Griffin", owgr: 16, country: "USA" },
+    { name: "Ludvig Åberg", owgr: 17, country: "Sweden" },
+    { name: "Jacob Bridgeman", owgr: 18, country: "USA" },
+    { name: "Alex Noren", owgr: 19, country: "Sweden" },
+    { name: "Patrick Reed", owgr: 20, country: "USA" },
+    { name: "Harris English", owgr: 21, country: "USA" },
+    { name: "Viktor Hovland", owgr: 22, country: "Norway" },
+    { name: "Tyrrell Hatton", owgr: 23, country: "England" },
+    { name: "Akshay Bhatia", owgr: 24, country: "USA" },
+    { name: "Bryson DeChambeau", owgr: 25, country: "USA" },
+    { name: "Keegan Bradley", owgr: 26, country: "USA" },
+    { name: "Min Woo Lee", owgr: 27, country: "Australia" },
+    { name: "Sam Burns", owgr: 28, country: "USA" },
+    { name: "Maverick McNealy", owgr: 29, country: "USA" },
+    { name: "Si Woo Kim", owgr: 30, country: "South Korea" },
+    { name: "Jon Rahm", owgr: 31, country: "Spain" },
+    { name: "Ryan Gerard", owgr: 32, country: "USA" },
+    { name: "Patrick Cantlay", owgr: 33, country: "USA" },
+    { name: "Shane Lowry", owgr: 34, country: "Ireland" },
+    { name: "Kurt Kitayama", owgr: 35, country: "USA" },
+    { name: "Jake Knapp", owgr: 36, country: "USA" },
+    { name: "Marco Penge", owgr: 37, country: "England" },
+    { name: "Nicolai Højgaard", owgr: 38, country: "Denmark" },
+    { name: "Jason Day", owgr: 39, country: "Australia" },
+    { name: "Daniel Berger", owgr: 40, country: "USA" },
+    { name: "Aaron Rai", owgr: 41, country: "England" },
+    { name: "Nicolas Echavarria", owgr: 42, country: "Colombia" },
+    { name: "Corey Conners", owgr: 43, country: "Canada" },
+    { name: "Michael Kim", owgr: 44, country: "USA" },
+    { name: "Samuel Stevens", owgr: 45, country: "USA" },
+    { name: "Kristoffer Reitan", owgr: 46, country: "Norway" },
+    { name: "Michael Brennan", owgr: 47, country: "USA" },
+    { name: "Matt McCarty", owgr: 48, country: "USA" },
+    { name: "Gary Woodland", owgr: 49, country: "USA" },
+    { name: "Brian Harman", owgr: 50, country: "USA" },
+    // Additional notable players
+    { name: "Sahith Theegala", owgr: 52, country: "USA" },
+    { name: "Tony Finau", owgr: 55, country: "USA" },
+    { name: "Rickie Fowler", owgr: 58, country: "USA" },
+    { name: "Will Zalatoris", owgr: 60, country: "USA" },
+    { name: "Brooks Koepka", owgr: 62, country: "USA" },
+    { name: "Jordan Spieth", owgr: 65, country: "USA" },
+    { name: "Dustin Johnson", owgr: 70, country: "USA" },
+    { name: "Sungjae Im", owgr: 53, country: "South Korea" },
+    { name: "Tom Kim", owgr: 56, country: "South Korea" },
+    { name: "Byeong Hun An", owgr: 57, country: "South Korea" },
+    { name: "Joaquín Niemann", owgr: 59, country: "Chile" },
+    { name: "Adam Scott", owgr: 64, country: "Australia" },
+    { name: "Christiaan Bezuidenhout", owgr: 54, country: "South Africa" },
+    { name: "Thomas Detry", owgr: 61, country: "Belgium" },
+    { name: "Matthieu Pavon", owgr: 63, country: "France" },
+    { name: "Victor Perez", owgr: 66, country: "France" },
+    { name: "Emiliano Grillo", owgr: 68, country: "Argentina" },
+    { name: "Thriston Lawrence", owgr: 69, country: "South Africa" },
+    { name: "Rasmus Højgaard", owgr: 71, country: "Denmark" },
+    { name: "Cameron Smith", owgr: 72, country: "Australia" },
+    { name: "Sergio Garcia", owgr: 75, country: "Spain" },
+    { name: "Phil Mickelson", owgr: 80, country: "USA" },
+    { name: "Billy Horschel", owgr: 67, country: "USA" },
+    { name: "Nick Dunlap", owgr: 73, country: "USA" },
+    { name: "Davis Thompson", owgr: 74, country: "USA" },
+    { name: "Austin Eckroat", owgr: 76, country: "USA" },
+    { name: "Eric Cole", owgr: 77, country: "USA" },
+    { name: "Stephan Jaeger", owgr: 78, country: "Germany" },
+    { name: "Lee Hodges", owgr: 79, country: "USA" },
+    { name: "Mackenzie Hughes", owgr: 81, country: "Canada" },
+    { name: "Tiger Woods", owgr: 900, country: "USA" },
+    { name: "Taylor Pendrith", owgr: 82, country: "Canada" },
+    { name: "Denny McCarthy", owgr: 83, country: "USA" },
+    { name: "Kevin Yu", owgr: 84, country: "Chinese Taipei" },
+    { name: "Louis Oosthuizen", owgr: 85, country: "South Africa" },
+  ];
+}
+
+const CATEGORIES = [
+  { id: "top10_1", label: "Top 10 Pick #1", desc: "A player in the Top 10 of the official world golf rankings", rule: "top10" },
+  { id: "top10_2", label: "Top 10 Pick #2", desc: "A player in the Top 10 of the official world golf rankings", rule: "top10" },
+  { id: "international", label: "International", desc: "An international born player not in the Top 10 of the world ranking", rule: "international" },
+  { id: "no_major", label: "No Major Wins", desc: "A player that has never won a major", rule: "no_major" },
+  { id: "first_time", label: "First Timer", desc: "A player playing this major for the very first time", rule: "first_time" },
+];
+
+// First-timers per major/year
+const FIRST_TIMERS = {
+  2025: {
+    masters: ["Nick Dunlap","Akshay Bhatia","Matthieu Pavon","Eric Cole","Austin Eckroat","Ben Griffin","Jake Knapp","Chris Gotterup","Davis Thompson","Stephan Jaeger","Marco Penge","Lee Hodges","Maverick McNealy","Kevin Yu","Aaron Rai","Thomas Detry","Thriston Lawrence","Taylor Pendrith","Denny McCarthy","Nicolai Højgaard","Jacob Bridgeman","Ryan Gerard","Samuel Stevens","Michael Brennan","Matt McCarty","Kurt Kitayama","Michael Kim","Kristoffer Reitan"],
+    pga: ["Nick Dunlap","Ben Griffin","Jake Knapp","Chris Gotterup","Davis Thompson","Austin Eckroat","Stephan Jaeger","Marco Penge","Lee Hodges","Maverick McNealy","Kevin Yu","Taylor Pendrith","Denny McCarthy","Jacob Bridgeman","Ryan Gerard","Samuel Stevens","Michael Brennan","Matt McCarty","Kurt Kitayama","Michael Kim","Kristoffer Reitan"],
+    usopen: ["Nick Dunlap","Ben Griffin","Jake Knapp","Chris Gotterup","Davis Thompson","Austin Eckroat","Stephan Jaeger","Marco Penge","Lee Hodges","Maverick McNealy","Kevin Yu","Taylor Pendrith","Denny McCarthy","Jacob Bridgeman","Ryan Gerard","Samuel Stevens","Michael Brennan","Matt McCarty"],
+    open: ["Nick Dunlap","Ben Griffin","Jake Knapp","Chris Gotterup","Davis Thompson","Austin Eckroat","Stephan Jaeger","Marco Penge","Lee Hodges","Maverick McNealy","Kevin Yu","Taylor Pendrith","Denny McCarthy","Nicolai Højgaard","Jacob Bridgeman","Ryan Gerard","Samuel Stevens","Michael Brennan","Matt McCarty"],
+  },
+  2026: {
+    masters: ["Nick Dunlap","Akshay Bhatia","Matthieu Pavon","Eric Cole","Austin Eckroat","Ben Griffin","Jake Knapp","Chris Gotterup","Davis Thompson","Stephan Jaeger","Marco Penge","Lee Hodges","Maverick McNealy","Kevin Yu","Aaron Rai","Thomas Detry","Thriston Lawrence","Taylor Pendrith","Denny McCarthy","Jacob Bridgeman","Ryan Gerard","Samuel Stevens","Michael Brennan","Matt McCarty","Kurt Kitayama","Michael Kim","Kristoffer Reitan","Nicolas Echavarria","Daniel Berger"],
+    pga: ["Nick Dunlap","Ben Griffin","Jake Knapp","Chris Gotterup","Davis Thompson","Austin Eckroat","Stephan Jaeger","Marco Penge","Lee Hodges","Jacob Bridgeman","Ryan Gerard","Samuel Stevens","Michael Brennan","Matt McCarty","Kurt Kitayama","Michael Kim","Kristoffer Reitan"],
+    usopen: ["Nick Dunlap","Ben Griffin","Jake Knapp","Chris Gotterup","Davis Thompson","Austin Eckroat","Stephan Jaeger","Marco Penge","Lee Hodges","Jacob Bridgeman","Ryan Gerard","Samuel Stevens","Michael Brennan","Matt McCarty"],
+    open: ["Nick Dunlap","Ben Griffin","Jake Knapp","Chris Gotterup","Davis Thompson","Austin Eckroat","Stephan Jaeger","Marco Penge","Lee Hodges","Jacob Bridgeman","Ryan Gerard","Samuel Stevens","Michael Brennan","Matt McCarty"],
+  },
+  2027: {
+    masters: ["Nick Dunlap","Ben Griffin","Jake Knapp","Chris Gotterup","Davis Thompson","Austin Eckroat","Stephan Jaeger","Marco Penge","Lee Hodges","Jacob Bridgeman","Ryan Gerard"],
+    pga: ["Nick Dunlap","Ben Griffin","Jake Knapp","Chris Gotterup","Davis Thompson","Austin Eckroat","Stephan Jaeger","Marco Penge"],
+    usopen: ["Nick Dunlap","Ben Griffin","Jake Knapp","Chris Gotterup","Davis Thompson"],
+    open: ["Nick Dunlap","Ben Griffin","Jake Knapp","Chris Gotterup","Davis Thompson"],
+  },
+};
+
+function getCategoryPool(rule, major, year) {
+  const field = getFullField();
+  const ft = FIRST_TIMERS[year]?.[major] || FIRST_TIMERS[2026]?.[major] || [];
+  switch (rule) {
+    case "top10": return field.filter(g => g.owgr <= 10);
+    case "international": return field.filter(g => g.country !== "USA" && g.owgr > 10);
+    case "no_major": return field.filter(g => !MAJOR_WINNERS.has(g.name));
+    case "first_time": return field.filter(g => ft.includes(g.name));
+    default: return field;
+  }
+}
+
+function generateSnakeOrder(n, total) {
+  const o = []; let fwd = true, i = 0;
+  for (let p = 0; p < total; p++) {
+    o.push(i);
+    const nx = fwd ? i+1 : i-1;
+    if (nx >= n) fwd = false; else if (nx < 0) fwd = true; else i = nx;
+  }
+  return o;
+}
+function genId() { return Math.random().toString(36).substr(2, 8).toUpperCase(); }
+async function saveGame(id, d) { try { await window.storage.set(`gm:${id}`, JSON.stringify(d)); } catch(e){} }
+async function loadGame(id) { try { const r = await window.storage.get(`gm:${id}`); return r ? JSON.parse(r.value) : null; } catch(e) { return null; } }
+async function listGames() { try { const r = await window.storage.list("gm:"); return r?.keys || []; } catch(e) { return []; } }
+async function delGame(id) { try { await window.storage.delete(`gm:${id}`); } catch(e){} }
+function fmt(s) { return s === 0 ? "E" : s > 0 ? `+${s}` : `${s}`; }
+function sColor(s) { return s > 0 ? "#dc2626" : "#1a1a1a"; }
+
+const C = { hdr:"#2d4a2e", bg:"#f0eeeb", card:"#ffffff", brd:"#e0ddd8", txt:"#1a1a1a", mut:"#6b7280", lt:"#9ca3af", acc:"#2d4a2e", gold:"#b8860b", goldBrd:"#d4a843", swapBg:"#e8ede8", swapTxt:"#2d4a2e" };
+
+/* ═══════════════════════════════════════════════════════════════════
+   MAIN APP
+   ═══════════════════════════════════════════════════════════════════ */
+function App() {
+  const [scr, setScr] = useState("home");
+  const [yr, setYr] = useState(2026);
+  const [maj, setMaj] = useState(null);
+  const [nu, setNu] = useState(2);
+  const [names, setNames] = useState(["",""]);
+  const [users, setUsers] = useState([]);
+  const [gid, setGid] = useState(null);
+  const [gamesIdx, setGamesIdx] = useState({});
+  const [draft, setDraft] = useState(null);
+  const [gdata, setGdata] = useState(null);
+  const [step, setStep] = useState("count");
+  const [note, setNote] = useState(null);
+  const [share, setShare] = useState(null);
+
+  useEffect(() => { reloadGames(); }, [yr, scr]);
+  useEffect(() => {
+    const p = new URLSearchParams(window.location.search||"");
+    const g = p.get("game");
+    if (g) loadGame(g).then(d => { if(d){ setGid(g); setYr(d.year); setMaj(d.major); setUsers(d.users); setGdata(d); setScr("scoreboard"); }});
+  }, []);
+
+  async function reloadGames() {
+    const keys = await listGames();
+    const m = {};
+    for (const k of keys) {
+      const id = k.replace("gm:","");
+      const d = await loadGame(id);
+      if (d && d.year === yr) { if(!m[d.major]) m[d.major]=[]; m[d.major].push({gid:id,...d}); }
+    }
+    setGamesIdx(m);
+  }
+
+  const notify = (msg) => { setNote(msg); setTimeout(()=>setNote(null), 3000); };
+  const goHome = () => { setScr("home"); setMaj(null); setGdata(null); setShare(null); setStep("count"); };
+  const updGame = (fn) => { setGdata(prev => { const next = fn(prev); saveGame(gid, next); return next; }); };
+
+  const winner = () => {
+    if (!gdata) return null;
+    const {picks,users:u,tournamentWinner:tw} = gdata;
+    if (tw) { for(let i=0;i<u.length;i++) if(picks[i].main.some(p=>p.golfer===tw)) return {idx:i,name:u[i],reason:`Picked the tournament winner (${tw})`}; }
+    const cc = picks.map(p=>p.main.filter(m=>m.madeCut).length);
+    const mx = Math.max(...cc); if(mx===0) return null;
+    const tied = cc.reduce((a,c,i)=>c===mx?[...a,i]:a,[]);
+    if(tied.length===1) return {idx:tied[0],name:u[tied[0]],reason:`Most golfers made the cut (${mx})`};
+    let bs=Infinity,bi=-1;
+    for(const i of tied){ const t=picks[i].main.filter(m=>m.madeCut).reduce((s,m)=>s+m.score,0); if(t<bs){bs=t;bi=i;} }
+    if(bi>=0) return {idx:bi,name:u[bi],reason:`Lowest cumulative score (${fmt(bs)})`};
+    return null;
+  };
+
+  return (
+    <div style={{background:C.bg,minHeight:"100vh",fontFamily:"Georgia,'Times New Roman',serif"}}>
+      {note&&<div style={{position:"fixed",top:16,left:"50%",transform:"translateX(-50%)",zIndex:1000,background:C.hdr,color:"#fff",padding:"12px 24px",borderRadius:8,fontSize:14,fontWeight:500,boxShadow:"0 4px 12px rgba(0,0,0,.15)",fontFamily:"sans-serif"}}>{note}</div>}
+      <div style={{background:C.hdr,color:"#fff",padding:"16px 32px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+        <div style={{display:"flex",alignItems:"center",gap:10}}>
+          <span style={{fontSize:24}}>⛳</span>
+          <div>
+            <div style={{fontSize:22,fontWeight:700,fontStyle:"italic"}}>Major Pick'em</div>
+            <div style={{fontSize:12,opacity:.8,fontFamily:"sans-serif"}}>Golf Major Championship Draft</div>
+          </div>
+        </div>
+        {scr!=="home"&&<a onClick={goHome} style={{color:"#fff",cursor:"pointer",fontSize:14,fontFamily:"sans-serif",textDecoration:"underline"}}>← Back to Tournaments</a>}
+      </div>
+      <div style={{maxWidth:1200,margin:"0 auto",padding:"32px 24px"}}>
+        {scr==="home"&&<Home yr={yr} setYr={setYr} gm={gamesIdx} onNew={mid=>{setMaj(mid);setStep("count");setNu(2);setNames(["",""]);setScr("setup");}} onOpen={async g=>{const d=await loadGame(g);if(d){setGid(g);setMaj(d.major);setUsers(d.users);setGdata(d);setScr("scoreboard");}}} onDel={async(g)=>{await delGame(g);reloadGames();notify("Game deleted");}}/>}
+        {scr==="setup"&&<Setup maj={maj} yr={yr} step={step} setStep={setStep} nu={nu} setNu={setNu} names={names} setNames={setNames} onStart={()=>{
+          const ns=names.slice(0,nu).map((n,i)=>n.trim()||`Player ${i+1}`);
+          setUsers(ns); const id=genId(); setGid(id);
+          setDraft({cur:0,order:generateSnakeOrder(nu,nu*5),picks:ns.map(()=>({main:[],alt:[]})),picked:new Set(),phase:"main"});
+          setScr("draft");
+        }}/>}
+        {scr==="draft"&&draft&&<Draft maj={maj} yr={yr} users={users} draft={draft} setDraft={setDraft}
+          onFinish={async()=>{
+            const d={year:yr,major:maj,users,picks:draft.picks,createdAt:new Date().toISOString(),tournamentWinner:null,status:"complete"};
+            await saveGame(gid,d); setGdata(d);
+            setShare(`${window.location.origin}${window.location.pathname}?game=${gid}`);
+            setScr("scoreboard"); notify("Draft complete! Game saved.");
+          }}
+          onReset={()=>{
+            setDraft({cur:0,order:generateSnakeOrder(users.length,users.length*5),picks:users.map(()=>({main:[],alt:[]})),picked:new Set(),phase:"main"});
+            notify("Draft reset");
+          }}/>}
+        {scr==="scoreboard"&&gdata&&<Scoreboard gdata={gdata} gid={gid} share={share} setShare={setShare} updGame={updGame} winner={winner} notify={notify}
+          onReset={()=>{
+            setDraft({cur:0,order:generateSnakeOrder(gdata.users.length,gdata.users.length*5),picks:gdata.users.map(()=>({main:[],alt:[]})),picked:new Set(),phase:"main"});
+            setUsers(gdata.users); setScr("draft"); notify("Draft reset!");
+          }}/>}
+      </div>
+    </div>
+  );
+}
+
+/* HOME */
+function Home({yr,setYr,gm,onNew,onOpen,onDel}) {
+  const mids=["masters","pga","usopen","open"];
+  return <div>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:32,flexWrap:"wrap",gap:16}}>
+      <h2 style={{margin:0,fontSize:28,fontWeight:700}}>{yr} Men's Golf Majors</h2>
+      <div style={{display:"flex",border:`1px solid ${C.brd}`,borderRadius:8,overflow:"hidden"}}>
+        {YEARS.map(y=><button key={y} onClick={()=>setYr(y)} style={{padding:"10px 20px",border:"none",cursor:"pointer",background:y===yr?C.acc:"#fff",color:y===yr?"#fff":C.txt,fontSize:15,fontWeight:600,fontFamily:"sans-serif",borderRight:`1px solid ${C.brd}`}}>{y}</button>)}
+      </div>
+    </div>
+    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(460px,1fr))",gap:24}}>
+      {mids.map(mid=>{
+        const v=VENUES[yr]?.[mid]||"TBD"; const games=gm[mid]||[];
+        return <div key={mid} style={{background:C.card,borderRadius:12,border:`1px solid ${C.brd}`,padding:"24px 28px"}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
+            <div>
+              <h3 style={{margin:0,fontSize:20,fontWeight:700}}>{MAJORS_INFO[mid].name}</h3>
+              <p style={{margin:"4px 0 0",fontSize:14,color:C.mut,fontFamily:"sans-serif"}}>{v}</p>
+            </div>
+            <button onClick={()=>onNew(mid)} style={{background:C.acc,color:"#fff",border:"none",borderRadius:8,padding:"10px 20px",fontSize:14,fontWeight:600,cursor:"pointer",fontFamily:"sans-serif"}}>+ New Game</button>
+          </div>
+          {games.length===0&&<p style={{margin:"16px 0 0",fontSize:14,color:C.lt,fontFamily:"sans-serif"}}>No games started</p>}
+          {games.map(g=><div key={g.gid} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 14px",marginTop:12,background:"#fafaf8",borderRadius:8,border:`1px solid ${C.brd}`}}>
+            <span style={{fontSize:14,fontFamily:"sans-serif"}}>{g.users.join(", ")}</span>
+            <div style={{display:"flex",gap:8,alignItems:"center"}}>
+              <span style={{background:"#e8f5e9",color:"#2e7d32",padding:"4px 10px",borderRadius:4,fontSize:12,fontFamily:"sans-serif",fontWeight:500}}>Complete</span>
+              <button onClick={()=>onOpen(g.gid)} style={{background:"none",border:"none",cursor:"pointer",fontSize:13,color:C.acc,fontFamily:"sans-serif",textDecoration:"underline"}}>Open</button>
+              <button onClick={()=>onDel(g.gid)} style={{background:"none",border:"none",cursor:"pointer",fontSize:16,color:C.lt}}>×</button>
+            </div>
+          </div>)}
+        </div>;
+      })}
+    </div>
+  </div>;
+}
+
+/* SETUP */
+function Setup({maj,yr,step,setStep,nu,setNu,names,setNames,onStart}) {
+  const v=VENUES[yr]?.[maj]||"TBD";
+  return <div style={{display:"flex",justifyContent:"center",paddingTop:40}}>
+    <div style={{background:C.card,borderRadius:12,border:`1px solid ${C.brd}`,padding:"32px 36px",maxWidth:520,width:"100%"}}>
+      <h2 style={{margin:"0 0 4px",fontSize:26,fontWeight:700}}>{MAJORS_INFO[maj]?.name} {yr}</h2>
+      <p style={{margin:"0 0 28px",fontSize:14,color:C.mut,fontFamily:"sans-serif"}}>{v}</p>
+      {step==="count"&&<>
+        <h3 style={{margin:"0 0 16px",fontSize:17,fontWeight:700,fontFamily:"sans-serif"}}>How many users are playing?</h3>
+        <div style={{display:"flex",alignItems:"center",marginBottom:28}}>
+          <button onClick={()=>setNu(Math.max(2,nu-1))} style={{width:48,height:48,border:`1px solid ${C.brd}`,borderRadius:"8px 0 0 8px",background:"#fff",fontSize:20,cursor:"pointer",fontFamily:"sans-serif"}}>−</button>
+          <div style={{width:48,height:48,borderTop:`1px solid ${C.brd}`,borderBottom:`1px solid ${C.brd}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,fontWeight:700,fontFamily:"sans-serif"}}>{nu}</div>
+          <button onClick={()=>{const n=nu+1;setNu(n);setNames(p=>{const x=[...p];while(x.length<n)x.push("");return x;});}} style={{width:48,height:48,border:`1px solid ${C.brd}`,borderRadius:"0 8px 8px 0",background:"#fff",fontSize:20,cursor:"pointer",fontFamily:"sans-serif"}}>+</button>
+        </div>
+        <button onClick={()=>setStep("names")} style={{width:"100%",background:C.acc,color:"#fff",border:"none",borderRadius:8,padding:14,fontSize:16,fontWeight:600,cursor:"pointer",fontFamily:"sans-serif"}}>Next: Enter Names</button>
+      </>}
+      {step==="names"&&<>
+        <h3 style={{margin:"0 0 16px",fontSize:17,fontWeight:700,fontFamily:"sans-serif"}}>Enter player names</h3>
+        {Array.from({length:nu}).map((_,i)=><div key={i} style={{marginBottom:16}}>
+          <label style={{fontSize:13,fontWeight:600,display:"block",marginBottom:4,fontFamily:"sans-serif"}}>Player {i+1}</label>
+          <input value={names[i]||""} onChange={e=>{const n=[...names];n[i]=e.target.value;setNames(n);}} placeholder={`Player ${i+1}`}
+            style={{width:"100%",boxSizing:"border-box",padding:"12px 14px",borderRadius:8,border:`1px solid ${C.brd}`,fontSize:15,fontFamily:"sans-serif",outline:"none"}}/>
+        </div>)}
+        <div style={{display:"flex",gap:12,marginTop:8}}>
+          <button onClick={()=>setStep("count")} style={{flex:1,background:"#fff",color:C.txt,border:`1px solid ${C.brd}`,borderRadius:8,padding:14,fontSize:15,fontWeight:600,cursor:"pointer",fontFamily:"sans-serif"}}>Back</button>
+          <button onClick={onStart} style={{flex:1,background:"#8faa8f",color:"#fff",border:"none",borderRadius:8,padding:14,fontSize:15,fontWeight:600,cursor:"pointer",fontFamily:"sans-serif"}}>Start Draft</button>
+        </div>
+      </>}
+    </div>
+  </div>;
+}
+
+/* DRAFT */
+function Draft({maj,yr,users,draft,setDraft,onFinish,onReset}) {
+  const [sels,setSels]=useState({});
+  const [altU,setAltU]=useState(0);
+  const [altG,setAltG]=useState("");
+  const total=users.length*5;
+  const mainDone=draft.cur>=total;
+  const altsDone=draft.picks.every(p=>p.alt.length>=2);
+  const curU=!mainDone?draft.order[draft.cur]:null;
+  const curPicks=curU!==null?draft.picks[curU]:null;
+  const usedCats=curPicks?curPicks.main.map(p=>p.cat):[];
+  const pickNum=curPicks?curPicks.main.length+1:0;
+
+  const avail=(rule)=>getCategoryPool(rule,maj,yr).filter(g=>!draft.picked.has(g.name)).sort((a,b)=>a.owgr-b.owgr);
+  const allAvail=getFullField().filter(g=>!draft.picked.has(g.name)).sort((a,b)=>a.owgr-b.owgr);
+
+  const pick=(catId)=>{
+    const g=sels[catId]; if(!g||curU===null) return;
+    setDraft(p=>{
+      const np=p.picks.map((pk,i)=>i===curU?{...pk,main:[...pk.main,{golfer:g,cat:catId,score:0,madeCut:false}]}:pk);
+      const ns=new Set(p.picked); ns.add(g);
+      return {...p,cur:p.cur+1,picks:np,picked:ns};
+    });
+    setSels(p=>{const n={...p};delete n[catId];return n;});
+  };
+
+  const pickAlt=()=>{
+    if(!altG)return;
+    setDraft(p=>{
+      const np=p.picks.map((pk,i)=>i===altU?{...pk,alt:[...pk.alt,{golfer:altG,score:0}]}:pk);
+      const ns=new Set(p.picked); ns.add(altG);
+      return {...p,picks:np,picked:ns};
+    });
+    setAltG("");
+  };
+
+  const owgrOf=(name)=>getFullField().find(g=>g.name===name)?.owgr||"—";
+
+  return <div>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:24,flexWrap:"wrap",gap:12}}>
+      <h2 style={{margin:0,fontSize:26,fontWeight:700}}>{MAJORS_INFO[maj]?.name} {yr} — Draft</h2>
+      <button onClick={onReset} style={{background:"#ef4444",color:"#fff",border:"none",borderRadius:8,padding:"10px 20px",fontSize:14,fontWeight:600,cursor:"pointer",fontFamily:"sans-serif"}}>Reset Draft</button>
+    </div>
+    {!mainDone&&curU!==null&&<div style={{background:C.card,borderRadius:12,border:`1px solid ${C.brd}`,padding:"20px 28px",marginBottom:20}}>
+      <div style={{fontSize:18}}><strong style={{color:C.acc,fontStyle:"italic"}}>{users[curU]}</strong><span style={{fontFamily:"sans-serif"}}> — Pick {pickNum} of 5</span></div>
+      <div style={{fontSize:13,color:C.mut,fontFamily:"sans-serif",marginTop:2}}>Select a category and player below</div>
+    </div>}
+    {!mainDone&&CATEGORIES.map(cat=>{
+      const dis=usedCats.includes(cat.id); const pool=avail(cat.rule);
+      return <div key={cat.id} style={{background:C.card,borderRadius:12,border:`1px solid ${C.brd}`,padding:"18px 28px",marginBottom:12,opacity:dis?.4:1,display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:12}}>
+        <div style={{minWidth:200}}>
+          <div style={{fontSize:16,fontWeight:700,fontFamily:"sans-serif"}}>{cat.label}</div>
+          <div style={{fontSize:13,color:C.mut,fontFamily:"sans-serif"}}>{cat.desc}</div>
+        </div>
+        <div style={{display:"flex",gap:8,alignItems:"center"}}>
+          <select value={sels[cat.id]||""} onChange={e=>setSels(p=>({...p,[cat.id]:e.target.value}))} disabled={dis}
+            style={{padding:"10px 14px",borderRadius:8,border:`1px solid ${C.brd}`,fontSize:14,fontFamily:"sans-serif",minWidth:260,background:"#fff",outline:"none"}}>
+            <option value="">Select player...</option>
+            {pool.map(g=><option key={g.name} value={g.name}>#{g.owgr} {g.name} ({g.country})</option>)}
+          </select>
+          <button onClick={()=>pick(cat.id)} disabled={dis||!sels[cat.id]}
+            style={{background:dis?"#ccc":C.acc,color:"#fff",border:"none",borderRadius:8,padding:"10px 20px",fontSize:14,fontWeight:600,cursor:"pointer",fontFamily:"sans-serif",opacity:(dis||!sels[cat.id])?.4:1}}>Pick</button>
+        </div>
+      </div>;
+    })}
+    {mainDone&&!altsDone&&<div style={{background:C.card,borderRadius:12,border:`1px solid ${C.brd}`,padding:"24px 28px",marginBottom:20}}>
+      <h3 style={{margin:"0 0 12px",fontSize:18,fontWeight:700,fontFamily:"sans-serif"}}>Alternate Picks</h3>
+      <p style={{fontSize:13,color:C.mut,fontFamily:"sans-serif",margin:"0 0 16px"}}>Each player picks 2 alternates in case a primary pick withdraws.</p>
+      <div style={{display:"flex",gap:8,marginBottom:16,flexWrap:"wrap"}}>
+        {users.map((u,i)=><button key={i} onClick={()=>setAltU(i)} disabled={draft.picks[i].alt.length>=2}
+          style={{padding:"8px 16px",border:`1px solid ${C.brd}`,borderRadius:8,background:i===altU?C.acc:"#fff",color:i===altU?"#fff":C.txt,fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"sans-serif",opacity:draft.picks[i].alt.length>=2?.4:1}}>
+          {u} ({draft.picks[i].alt.length}/2)
+        </button>)}
+      </div>
+      <div style={{display:"flex",gap:8}}>
+        <select value={altG} onChange={e=>setAltG(e.target.value)} style={{flex:1,padding:"10px 14px",borderRadius:8,border:`1px solid ${C.brd}`,fontSize:14,fontFamily:"sans-serif",background:"#fff",outline:"none"}}>
+          <option value="">Select alternate...</option>
+          {allAvail.map(g=><option key={g.name} value={g.name}>#{g.owgr} {g.name} ({g.country})</option>)}
+        </select>
+        <button onClick={pickAlt} disabled={!altG||draft.picks[altU].alt.length>=2}
+          style={{background:C.acc,color:"#fff",border:"none",borderRadius:8,padding:"10px 20px",fontSize:14,fontWeight:600,cursor:"pointer",fontFamily:"sans-serif",opacity:!altG?.5:1}}>Pick Alternate</button>
+      </div>
+    </div>}
+    {mainDone&&altsDone&&<div style={{textAlign:"center",marginTop:24}}>
+      <button onClick={onFinish} style={{background:C.acc,color:"#fff",border:"none",borderRadius:8,padding:"16px 48px",fontSize:17,fontWeight:600,cursor:"pointer",fontFamily:"sans-serif"}}>Complete Draft & View Scoreboard →</button>
+    </div>}
+    <div style={{marginTop:28}}>
+      <h3 style={{fontSize:16,fontWeight:700,marginBottom:12,fontFamily:"sans-serif"}}>Draft Board</h3>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(240px,1fr))",gap:12}}>
+        {users.map((u,i)=><div key={i} style={{background:C.card,borderRadius:12,border:`1px solid ${C.brd}`,padding:16,borderTop:curU===i?`3px solid ${C.acc}`:"none"}}>
+          <div style={{fontSize:15,fontWeight:700,marginBottom:10,fontFamily:"sans-serif"}}>{u}</div>
+          {draft.picks[i].main.map((p,j)=><div key={j} style={{fontSize:13,padding:"6px 10px",marginBottom:4,background:"#f7f7f5",borderRadius:6,fontFamily:"sans-serif",display:"flex",justifyContent:"space-between"}}>
+            <span><span style={{color:C.mut,marginRight:4}}>#{owgrOf(p.golfer)}</span>{p.golfer}</span>
+            <span style={{color:C.mut,fontSize:11}}>{CATEGORIES.find(c=>c.id===p.cat)?.label}</span>
+          </div>)}
+          {draft.picks[i].main.length===0&&<div style={{fontSize:13,color:C.lt,fontFamily:"sans-serif"}}>No picks yet</div>}
+          {draft.picks[i].alt.length>0&&<div style={{marginTop:8,paddingTop:8,borderTop:`1px solid ${C.brd}`}}>
+            <div style={{fontSize:11,color:C.mut,fontFamily:"sans-serif",marginBottom:4}}>Alternates</div>
+            {draft.picks[i].alt.map((a,j)=><div key={j} style={{fontSize:13,padding:"4px 10px",marginBottom:2,background:"#f7f7f5",borderRadius:6,fontFamily:"sans-serif",color:C.gold}}>#{owgrOf(a.golfer)} {a.golfer}</div>)}
+          </div>}
+        </div>)}
+      </div>
+    </div>
+  </div>;
+}
+
+/* SCOREBOARD */
+function Scoreboard({gdata,gid,share,setShare,updGame,winner,notify,onReset}) {
+  const [editing,setEditing]=useState(null);
+  const [ev,setEv]=useState("");
+  const [wi,setWi]=useState("");
+  const v=VENUES[gdata.year]?.[gdata.major]||"TBD";
+  const w=winner();
+  const allG=gdata.picks.flatMap(p=>p.main.map(m=>m.golfer)).filter((v,i,a)=>a.indexOf(v)===i);
+  const saveEdit=()=>{
+    if(!editing)return; const val=parseInt(ev)||0;
+    if(editing.t==="main") updGame(p=>{const np=[...p.picks];np[editing.u]={...np[editing.u],main:np[editing.u].main.map((m,j)=>j===editing.p?{...m,score:val}:m)};return{...p,picks:np};});
+    else updGame(p=>{const np=[...p.picks];np[editing.u]={...np[editing.u],alt:np[editing.u].alt.map((a,j)=>j===editing.p?{...a,score:val}:a)};return{...p,picks:np};});
+    setEditing(null);
+  };
+  const doShare=()=>{
+    const link=`${window.location.origin}${window.location.pathname}?game=${gid}`;
+    setShare(link); try{navigator.clipboard?.writeText(link);notify("Link copied to clipboard!");}catch(e){}
+  };
+
+  return <div>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:6,flexWrap:"wrap",gap:12}}>
+      <div>
+        <h2 style={{margin:0,fontSize:26,fontWeight:700}}>{MAJORS_INFO[gdata.major]?.name} {gdata.year} — Scoreboard</h2>
+        <p style={{margin:"4px 0 0",fontSize:14,color:C.mut,fontFamily:"sans-serif"}}>{v}</p>
+      </div>
+      <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+        <button onClick={()=>{notify("⚡ Syncing scores... (simulated)");updGame(p=>({...p,picks:p.picks.map(pk=>({...pk,main:pk.main.map(m=>({...m,score:-(Math.floor(Math.random()*20)-4)})),alt:pk.alt.map(a=>({...a,score:-(Math.floor(Math.random()*16)-3)}))}))}));}}
+          style={{background:C.acc,color:"#fff",border:"none",borderRadius:8,padding:"10px 18px",fontSize:14,fontWeight:600,cursor:"pointer",fontFamily:"sans-serif"}}>⚡ Sync Scores</button>
+        <button onClick={()=>notify("Click any score to edit")} style={{background:"#fff",color:C.txt,border:`1px solid ${C.brd}`,borderRadius:8,padding:"10px 18px",fontSize:14,fontWeight:600,cursor:"pointer",fontFamily:"sans-serif"}}>Update Scores</button>
+        <button onClick={doShare} style={{background:"#fff",color:C.txt,border:`1px solid ${C.brd}`,borderRadius:8,padding:"10px 18px",fontSize:14,fontWeight:600,cursor:"pointer",fontFamily:"sans-serif"}}>Share Link</button>
+        <button onClick={onReset} style={{background:"#ef4444",color:"#fff",border:"none",borderRadius:8,padding:"10px 18px",fontSize:14,fontWeight:600,cursor:"pointer",fontFamily:"sans-serif"}}>Reset</button>
+      </div>
+    </div>
+    {share&&<div style={{background:"#e8f5e9",borderRadius:8,padding:"10px 16px",marginBottom:16,marginTop:12,fontSize:13,fontFamily:"sans-serif",color:"#2e7d32",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+      <span>Share link: <strong style={{wordBreak:"break-all"}}>{share}</strong></span>
+      <button onClick={()=>setShare(null)} style={{background:"none",border:"none",cursor:"pointer",fontSize:16}}>×</button>
+    </div>}
+    {w&&<div style={{background:C.hdr,color:"#fff",borderRadius:10,padding:"14px 24px",margin:"16px 0 20px",textAlign:"center",fontSize:17,fontWeight:600,fontFamily:"sans-serif"}}>🏆 {w.name} wins — {w.reason}</div>}
+    <div style={{display:"flex",gap:8,margin:"12px 0 20px",alignItems:"center"}}>
+      <select value={wi} onChange={e=>setWi(e.target.value)} style={{padding:"8px 12px",borderRadius:6,border:`1px solid ${C.brd}`,fontSize:13,fontFamily:"sans-serif",minWidth:200,background:"#fff"}}>
+        <option value="">Set Tournament Winner...</option>
+        {allG.map(g=><option key={g} value={g}>{g}</option>)}
+      </select>
+      <button onClick={()=>{if(wi){updGame(p=>({...p,tournamentWinner:wi}));setWi("");}}} disabled={!wi}
+        style={{background:C.acc,color:"#fff",border:"none",borderRadius:8,padding:"8px 16px",fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"sans-serif",opacity:wi?1:.5}}>Set Winner</button>
+      {gdata.tournamentWinner&&<span style={{fontSize:13,fontFamily:"sans-serif",color:C.gold,fontWeight:600}}>🏌️ Tournament Winner: {gdata.tournamentWinner}</span>}
+    </div>
+    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(480px,1fr))",gap:20}}>
+      {gdata.users.map((user,uIdx)=>{
+        const picks=gdata.picks[uIdx];
+        const cutCt=picks.main.filter(p=>p.madeCut).length;
+        const total=picks.main.reduce((s,p)=>s+p.score,0);
+        const isW=w?.idx===uIdx;
+        return <div key={uIdx} style={{background:C.card,borderRadius:12,border:isW?`2px dashed ${C.goldBrd}`:`1px solid ${C.brd}`,position:"relative",overflow:"visible"}}>
+          {isW&&<div style={{position:"absolute",top:-1,left:20,background:C.gold,color:"#fff",padding:"4px 14px",borderRadius:"0 0 8px 8px",fontSize:13,fontWeight:700,fontFamily:"sans-serif"}}>🏆 Winner</div>}
+          <div style={{padding:"20px 24px 12px",display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+            <div style={{fontSize:22,fontWeight:700,marginTop:isW?12:0}}>{user}</div>
+            <div style={{textAlign:"right"}}>
+              <div style={{fontSize:32,fontWeight:700,color:sColor(total)}}>{fmt(total)}</div>
+              <div style={{fontSize:12,color:C.mut,fontFamily:"sans-serif"}}>{cutCt}/5 made cut</div>
+            </div>
+          </div>
+          <div style={{padding:"0 24px 20px"}}>
+            <table style={{width:"100%",borderCollapse:"collapse",fontFamily:"sans-serif"}}>
+              <thead><tr style={{fontSize:12,color:C.mut,fontWeight:500}}>
+                <th style={{textAlign:"left",padding:"8px 0",borderBottom:`1px solid ${C.brd}`}}>Player</th>
+                <th style={{textAlign:"left",padding:"8px 0",borderBottom:`1px solid ${C.brd}`}}>Category</th>
+                <th style={{textAlign:"center",padding:"8px 0",borderBottom:`1px solid ${C.brd}`,width:55}}>Score</th>
+                <th style={{textAlign:"center",padding:"8px 0",borderBottom:`1px solid ${C.brd}`,width:40}}>Cut</th>
+                <th style={{textAlign:"center",padding:"8px 0",borderBottom:`1px solid ${C.brd}`,width:80}}>Sub</th>
+              </tr></thead>
+              <tbody>{picks.main.map((pk,pIdx)=><tr key={pIdx} style={{borderBottom:`1px solid ${C.brd}`}}>
+                <td style={{padding:"10px 0",fontSize:14,fontWeight:600}}>{pk.golfer}</td>
+                <td style={{padding:"10px 0",fontSize:13,color:C.mut}}>{CATEGORIES.find(c=>c.id===pk.cat)?.label}</td>
+                <td style={{textAlign:"center",padding:"10px 0"}}>
+                  {editing?.u===uIdx&&editing?.p===pIdx&&editing?.t==="main"
+                    ?<input value={ev} onChange={e=>setEv(e.target.value)} onKeyDown={e=>e.key==="Enter"&&saveEdit()} onBlur={saveEdit} autoFocus style={{width:40,textAlign:"center",padding:4,fontSize:13,border:`1px solid ${C.acc}`,borderRadius:4}}/>
+                    :<span onClick={()=>{setEditing({u:uIdx,p:pIdx,t:"main"});setEv(String(pk.score));}} style={{cursor:"pointer",fontWeight:600,fontSize:14,color:sColor(pk.score)}}>{fmt(pk.score)}</span>}
+                </td>
+                <td style={{textAlign:"center",padding:"10px 0"}}>
+                  <span onClick={()=>updGame(p=>{const np=[...p.picks];np[uIdx]={...np[uIdx],main:np[uIdx].main.map((m,j)=>j===pIdx?{...m,madeCut:!m.madeCut}:m)};return{...p,picks:np};})}
+                    style={{cursor:"pointer",fontSize:pk.madeCut?16:14,color:pk.madeCut?C.txt:C.lt}}>{pk.madeCut?"✓":"—"}</span>
+                </td>
+                <td style={{textAlign:"center",padding:"10px 0"}}>
+                  {picks.alt.length>0&&<select value="" onChange={e=>{const ai=parseInt(e.target.value);if(!isNaN(ai)){
+                    updGame(p=>{const np=[...p.picks];const u={...np[uIdx]};const nm=[...u.main];const na=[...u.alt];
+                    const tmp={golfer:nm[pIdx].golfer,score:nm[pIdx].score};nm[pIdx]={...nm[pIdx],golfer:na[ai].golfer,score:na[ai].score};na[ai]={golfer:tmp.golfer,score:tmp.score};
+                    np[uIdx]={...u,main:nm,alt:na};return{...p,picks:np};});notify("Player swapped!");}}}
+                    style={{background:C.swapBg,color:C.swapTxt,border:`1px solid ${C.swapBg}`,borderRadius:6,padding:"6px 12px",fontSize:13,cursor:"pointer",fontFamily:"sans-serif",fontWeight:500,minWidth:70}}>
+                    <option value="">Swap</option>
+                    {picks.alt.map((a,ai)=><option key={ai} value={ai}>{a.golfer}</option>)}
+                  </select>}
+                </td>
+              </tr>)}</tbody>
+            </table>
+            {picks.alt.length>0&&<div style={{marginTop:16}}>
+              <div style={{fontSize:13,fontWeight:600,color:C.gold,marginBottom:8,fontFamily:"sans-serif"}}>Alternates <span style={{fontWeight:400,color:C.mut}}>(not counted in team score)</span></div>
+              {picks.alt.map((alt,aIdx)=><div key={aIdx} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"6px 0",fontSize:14,fontFamily:"sans-serif"}}>
+                <span>{alt.golfer}</span>
+                <div style={{display:"flex",alignItems:"center",gap:10}}>
+                  {editing?.u===uIdx&&editing?.p===aIdx&&editing?.t==="alt"
+                    ?<input value={ev} onChange={e=>setEv(e.target.value)} onKeyDown={e=>e.key==="Enter"&&saveEdit()} onBlur={saveEdit} autoFocus style={{width:40,textAlign:"center",padding:4,fontSize:13,border:`1px solid ${C.acc}`,borderRadius:4}}/>
+                    :<span onClick={()=>{setEditing({u:uIdx,p:aIdx,t:"alt"});setEv(String(alt.score));}} style={{cursor:"pointer",fontWeight:600,color:sColor(alt.score)}}>{fmt(alt.score)}</span>}
+                  <span style={{fontSize:16}}>✓</span>
+                </div>
+              </div>)}
+            </div>}
+          </div>
+        </div>;
+      })}
+    </div>
+    <div style={{background:C.card,borderRadius:12,border:`1px solid ${C.brd}`,padding:"24px 28px",marginTop:32}}>
+      <h3 style={{margin:"0 0 12px",fontSize:18,fontWeight:700}}>Winning Rules</h3>
+      <div style={{fontSize:14,color:C.mut,fontFamily:"sans-serif",lineHeight:1.8}}>
+        <div>· Picking the tournament winner automatically wins the pick'em</div>
+        <div>· If no one picks the winner, the user with the most players making the 36-hole cut wins</div>
+        <div>· If users have the same number of players making the cut, lowest cumulative team score wins</div>
+      </div>
+    </div>
+    <div style={{textAlign:"center",marginTop:16,fontSize:11,color:C.lt,fontFamily:"sans-serif"}}>
+      OWGR Rankings: Week 15 — 12th April 2026 (owgr.com)
+    </div>
+  </div>;
+}
+
+// localStorage-based storage polyfill for GitHub Pages (replaces window.storage)
+if (!window.storage) {
+  window.storage = {
+    async get(key) {
+      const val = localStorage.getItem(key);
+      return val !== null ? { key, value: val } : null;
+    },
+    async set(key, value) {
+      localStorage.setItem(key, value);
+      return { key, value };
+    },
+    async delete(key) {
+      localStorage.removeItem(key);
+      return { key, deleted: true };
+    },
+    async list(prefix) {
+      const keys = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (!prefix || k.startsWith(prefix)) keys.push(k);
+      }
+      return { keys };
+    }
+  };
+}
+
+const { useState, useEffect } = React;
+const root = ReactDOM.createRoot(document.getElementById("root"));
+root.render(React.createElement(App));
+  </script>
+</body>
+</html>

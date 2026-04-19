@@ -1,0 +1,1083 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Major Pick'em — Golf Major Championship Draft</title>
+<link rel="preconnect" href="https://site.api.espn.com" />
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          fairway: { 50:'#f2f7f3', 100:'#e3eee5', 200:'#c6ddc9', 300:'#9ec1a4', 400:'#6fa078', 500:'#4e8458', 600:'#3c6a46', 700:'#305538', 800:'#28442f', 900:'#223827' },
+          pin: '#c24a2b',
+          masters: '#006747'
+        },
+        fontFamily: {
+          serif: ['"Playfair Display"', 'Georgia', 'serif'],
+          sans: ['Inter', 'system-ui', 'sans-serif']
+        }
+      }
+    }
+  };
+</script>
+<style>
+  html,body { background:#f3f4ed; font-family:Inter,system-ui,sans-serif; color:#1f2937; }
+  .font-serif { font-family:'Playfair Display', Georgia, serif; }
+  .card { background:#fff; border:1px solid #e5e7eb; border-radius:12px; }
+  .btn { display:inline-flex; align-items:center; justify-content:center; padding:8px 14px; border-radius:8px; font-weight:600; font-size:14px; transition:all .15s; }
+  .btn-primary { background:#3c6a46; color:#fff; }
+  .btn-primary:hover { background:#305538; }
+  .btn-primary:disabled { background:#9ec1a4; cursor:not-allowed; }
+  .btn-danger { background:#c24a2b; color:#fff; }
+  .btn-danger:hover { background:#a03e24; }
+  .btn-ghost { background:#fff; border:1px solid #d1d5db; }
+  .btn-ghost:hover { background:#f9fafb; }
+  .btn-light { background:#f3f4f6; border:1px solid #e5e7eb; }
+  .pill { border:1px solid #d1d5db; border-radius:8px; padding:6px 12px; font-weight:500; font-size:14px; cursor:pointer; }
+  .pill.active { background:#305538; color:#fff; border-color:#305538; }
+  select, input[type=text], input[type=number] { border:1px solid #d1d5db; border-radius:8px; padding:8px 10px; font-size:14px; background:#fff; width:100%; }
+  select:focus, input:focus { outline:none; border-color:#4e8458; box-shadow:0 0 0 3px rgba(78,132,88,.15); }
+  .winner-glow { box-shadow:0 0 0 2px #b38b00 inset, 0 4px 20px rgba(179,139,0,.15); border-color:#b38b00!important; }
+  .score-pos { color:#c24a2b; font-weight:700; }
+  .score-neg { color:#305538; font-weight:700; }
+  .score-even { color:#4b5563; font-weight:700; }
+  .tick { color:#305538; font-weight:700; }
+  .dash { color:#9ca3af; }
+  .hdr-gradient { background: linear-gradient(120deg,#305538 0%,#3c6a46 70%, #4e8458 100%); }
+  .subtle { color:#6b7280; }
+  .tbl-row + .tbl-row { border-top:1px solid #f1f3f5; }
+  details > summary { cursor:pointer; list-style:none; }
+  details > summary::-webkit-details-marker { display:none; }
+  .chip { display:inline-flex; align-items:center; gap:4px; padding:2px 8px; border-radius:999px; font-size:12px; font-weight:600; }
+  .chip-winner { background:#305538; color:#fff; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/lz-string@1.5.0/libs/lz-string.min.js"></script>
+
+<!-- ============================================================ -->
+<!--   STATIC DATA                                                -->
+<!-- ============================================================ -->
+<script>
+/* Country code -> emoji flag */
+window.COUNTRY_FLAG = (code) => {
+  if (!code) return '';
+  const c = code.toUpperCase();
+  // 3-letter IOC / FIFA -> ISO-2 map for common golf countries
+  const map = {
+    USA:'US', ENG:'GB', SCO:'GB', WAL:'GB', NIR:'GB', IRL:'IE', NED:'NL', ESP:'ES', SWE:'SE', NOR:'NO', DEN:'DK',
+    FRA:'FR', GER:'DE', AUT:'AT', SUI:'CH', ITA:'IT', BEL:'BE', POR:'PT', POL:'PL', FIN:'FI',
+    RSA:'ZA', ZIM:'ZW', AUS:'AU', NZL:'NZ', CAN:'CA', MEX:'MX', ARG:'AR', CHI:'CL', COL:'CO', VEN:'VE',
+    JPN:'JP', KOR:'KR', TPE:'TW', CHN:'CN', HKG:'HK', THA:'TH', MAS:'MY', PHI:'PH', IND:'IN', INA:'ID',
+    CZE:'CZ', SVK:'SK', RUS:'RU', ISR:'IL', FIJ:'FJ', PUR:'PR'
+  };
+  const iso2 = (c.length === 3 && map[c]) ? map[c] : (c.length === 2 ? c : (map[c] || ''));
+  if (!iso2 || iso2.length !== 2) return '';
+  return String.fromCodePoint(0x1F1E6 + iso2.charCodeAt(0) - 65)
+       + String.fromCodePoint(0x1F1E6 + iso2.charCodeAt(1) - 65);
+};
+
+/* Majors + venue info. The app will still display these even if ESPN returns nothing. */
+window.MAJORS = {
+  masters: {
+    id:'masters',
+    name:"The US Masters",
+    shortName:"Masters",
+    espnLeague:"mens-masters",
+    month: 4,
+    venues: {
+      2024:"Augusta National Golf Club", 2025:"Augusta National Golf Club",
+      2026:"Augusta National Golf Club", 2027:"Augusta National Golf Club",
+      2028:"Augusta National Golf Club"
+    }
+  },
+  pga: {
+    id:'pga',
+    name:"The PGA Championship",
+    shortName:"PGA",
+    espnLeague:"pga-championship",
+    month: 5,
+    venues: {
+      2024:"Valhalla Golf Club", 2025:"Quail Hollow Club",
+      2026:"Aronimink Golf Club", 2027:"PGA Frisco (Fields Ranch East)",
+      2028:"Aronimink Golf Club"
+    }
+  },
+  usopen: {
+    id:'usopen',
+    name:"The US Open",
+    shortName:"US Open",
+    espnLeague:"us-open",
+    month: 6,
+    venues: {
+      2024:"Pinehurst No. 2", 2025:"Oakmont Country Club",
+      2026:"Shinnecock Hills Golf Club", 2027:"Pebble Beach Golf Links",
+      2028:"Winged Foot Golf Club"
+    }
+  },
+  open: {
+    id:'open',
+    name:"The Open Championship",
+    shortName:"The Open",
+    espnLeague:"the-open",
+    month: 7,
+    venues: {
+      2024:"Royal Troon Golf Club", 2025:"Royal Portrush Golf Club",
+      2026:"Royal Birkdale Golf Club", 2027:"St Andrews (Old Course)",
+      2028:"Royal Liverpool Golf Club"
+    }
+  }
+};
+
+/* Historic men's professional major winners — post-1930 surnames/full names,
+   used to filter the "Not a player that has never won a major" category.
+   We match case-insensitively on BOTH the full name and the surname. */
+window.HISTORIC_MAJOR_WINNERS = [
+  // Pre-1980 era still referenced
+  "Bobby Jones","Gene Sarazen","Walter Hagen","Byron Nelson","Sam Snead","Ben Hogan",
+  "Cary Middlecoff","Jimmy Demaret","Tommy Bolt","Ed Furgol","Dick Mayer","Lew Worsham",
+  "Jack Fleck","Bob Rosburg","Julius Boros","Gary Player","Arnold Palmer","Jack Nicklaus",
+  "Lee Trevino","Billy Casper","Gene Littler","Tony Jacklin","Orville Moody","Dave Stockton",
+  "Charles Coody","Doug Sanders","Tom Weiskopf","Lou Graham","Hubert Green","Jerry Pate",
+  "David Graham","Hale Irwin","Larry Nelson","Fuzzy Zoeller","Tom Watson","Raymond Floyd",
+  "Andy North","John Mahaffey","Lanny Wadkins","Wayne Grady","Bob Tway","Mark Brooks",
+  "Steve Elkington","Craig Stadler","Curtis Strange","Seve Ballesteros","Sandy Lyle",
+  "Nick Faldo","Nick Price","Ian Baker-Finch","Bernhard Langer","Jose Maria Olazabal",
+  "Ben Crenshaw","Mark O'Meara","Tom Lehman","Justin Leonard","Paul Lawrie","Tiger Woods",
+  // 2000s–2020s
+  "David Duval","Retief Goosen","David Toms","Rich Beem","Mike Weir","Jim Furyk",
+  "Ben Curtis","Todd Hamilton","Shaun Micheel","Phil Mickelson","Vijay Singh",
+  "Michael Campbell","Geoff Ogilvy","Angel Cabrera","Zach Johnson","Padraig Harrington",
+  "Trevor Immelman","Stewart Cink","Lucas Glover","Graeme McDowell","Louis Oosthuizen",
+  "Martin Kaymer","Charl Schwartzel","Rory McIlroy","Darren Clarke","Bubba Watson",
+  "Webb Simpson","Ernie Els","Keegan Bradley","Adam Scott","Jason Dufner","Justin Rose",
+  "Henrik Stenson","Jordan Spieth","Danny Willett","Dustin Johnson","Jimmy Walker",
+  "Sergio Garcia","Brooks Koepka","Justin Thomas","Patrick Reed","Francesco Molinari",
+  "Gary Woodland","Shane Lowry","Bryson DeChambeau","Y.E. Yang","Jason Day",
+  "Collin Morikawa","Hideki Matsuyama","Jon Rahm","Cameron Smith","Matt Fitzpatrick",
+  "Scottie Scheffler","Wyndham Clark","Brian Harman","Xander Schauffele","J.J. Spaun"
+];
+
+/* First-time-at-this-major player lists. These are compiled from ESPN / golf media
+   coverage of the specific tournament field. The app reaches for
+   FIRST_TIMERS[major][year] first; if we don't have a curated list it falls back
+   to "player who we can't find in any ESPN leaderboard for this major over the
+   last ~5 years" which is approximate but workable. */
+window.FIRST_TIMERS = {
+  /* The app reads these when the year is in the past; for 2026+ we start empty
+     and rely on the fallback heuristic until the field is announced. */
+  masters: {
+    2024: ["Neal Shipley","Jasper Stubbs","Christo Lamprecht","Stewart Hagestad","Santiago de la Fuente","Ryan Fox","Nick Dunlap","Akshay Bhatia","Austin Eckroat","Peter Malnati","Stephan Jaeger","Eric Cole","Adam Schenk","Luke List","Ludvig Aberg","Matthieu Pavon","Nicolai Hojgaard","Thorbjorn Olesen","Erik van Rooyen","Peter Kuest","Adrian Meronk"],
+    2025: ["Nick Dunlap","Luke Clanton","Davis Thompson","Aldrich Potgieter","Thomas Detry","Niklas Norgaard","Jhonattan Vegas","Robert MacIntyre","Rasmus Hojgaard","Justin Suh","Laurie Canter","Davis Riley","Sepp Straka","Byeong Hun An","Tom Kim","Taylor Pendrith","Keita Nakajima","Michael Kim","Joe Highsmith"],
+    2026: []
+  },
+  pga: { 2024:[], 2025:[], 2026:[] },
+  usopen: { 2024:[], 2025:[], 2026:[] },
+  open: { 2024:[], 2025:[], 2026:[] }
+};
+</script>
+
+<!-- ============================================================ -->
+<!--   APP                                                        -->
+<!-- ============================================================ -->
+<script type="text/babel" data-presets="env,react">
+const { useState, useEffect, useMemo, useRef, useCallback } = React;
+
+/* --------- tiny helpers --------- */
+const cls = (...xs) => xs.filter(Boolean).join(' ');
+const lc  = (s) => (s||'').toLowerCase().trim();
+const uid = () => Math.random().toString(36).slice(2,8) + Date.now().toString(36).slice(-4);
+
+const fmtScore = (s) => {
+  if (s === null || s === undefined || s === '') return '—';
+  if (s === 0) return 'E';
+  const n = Number(s);
+  if (Number.isNaN(n)) return String(s);
+  return n > 0 ? `+${n}` : `${n}`;
+};
+const scoreClass = (s) => {
+  if (s === null || s === undefined || s === '' || s === '—') return 'subtle';
+  const n = Number(s);
+  if (Number.isNaN(n)) return 'subtle';
+  if (n > 0) return 'score-pos';
+  if (n < 0) return 'score-neg';
+  return 'score-even';
+};
+
+/* --------- URL state (hash fragment) --------- */
+const encodeState = (obj) => {
+  try { return LZString.compressToEncodedURIComponent(JSON.stringify(obj)); }
+  catch(e) { return ''; }
+};
+const decodeState = (s) => {
+  try { return JSON.parse(LZString.decompressFromEncodedURIComponent(s)); }
+  catch(e) { return null; }
+};
+
+/* --------- localStorage helpers --------- */
+const LS_KEY = 'major_pickem_games_v1';
+const readAllGames = () => {
+  try { return JSON.parse(localStorage.getItem(LS_KEY) || '{}'); } catch(e){ return {}; }
+};
+const writeAllGames = (g) => {
+  try { localStorage.setItem(LS_KEY, JSON.stringify(g)); } catch(e){}
+};
+const saveGame = (game) => {
+  const all = readAllGames();
+  all[game.id] = { ...game, savedAt: Date.now() };
+  writeAllGames(all);
+};
+const loadGame = (id) => {
+  const all = readAllGames();
+  return all[id] || null;
+};
+const deleteGame = (id) => {
+  const all = readAllGames();
+  delete all[id];
+  writeAllGames(all);
+};
+const listGames = (majorId, year) => Object.values(readAllGames())
+  .filter(g => g.major === majorId && g.year === year)
+  .sort((a,b) => (b.savedAt||0) - (a.savedAt||0));
+
+/* --------- ESPN API --------- */
+/* Public endpoint, no key required. We hit the major-specific league slug.
+   The response shape looks roughly like:
+    { events:[ { name, date, competitions:[ { competitors:[ { athlete:{ displayName, flag{href}, country? }, statistics, status, score, ... }], status } ] } ] }
+*/
+const ESPN_BASE = 'https://site.api.espn.com/apis/site/v2/sports/golf';
+
+async function fetchEspnLeaderboard(leagueSlug, year) {
+  const url = `${ESPN_BASE}/${leagueSlug}/leaderboard?season=${year}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`ESPN ${leagueSlug} ${year} returned ${res.status}`);
+  return res.json();
+}
+
+function parseEspnField(json) {
+  // Find the main competition (single event per leaderboard call for that major/year)
+  const evt = (json.events && json.events[0]) || null;
+  if (!evt) return { players:[], status:null, cutLine:null, venue:null };
+  const comp = (evt.competitions && evt.competitions[0]) || null;
+  if (!comp) return { players:[], status:null, cutLine:null, venue:null };
+  const venue = (comp.venue && (comp.venue.fullName || comp.venue.name)) || null;
+  const cutLine = comp.cutScore ?? comp.cut ?? null;
+  const competitors = comp.competitors || [];
+  const players = competitors.map(c => {
+    const a = c.athlete || {};
+    const flagHref = (a.flag && a.flag.href) || null;
+    const countryAbv = (a.country && (a.country.abbreviation || a.country.id))
+                     || (a.birthPlace && a.birthPlace.country)
+                     || (a.flag && a.flag.alt) || null;
+    let worldRank = null;
+    const stats = c.statistics || [];
+    for (const s of stats) {
+      if (s.name && /world\s*rank|owgr/i.test(s.name)) { worldRank = Number(s.value) || null; }
+    }
+    // sometimes ESPN stores owgr in a.worldRanking
+    if (!worldRank && a.worldRanking) worldRank = Number(a.worldRanking) || null;
+    if (!worldRank && c.worldRanking) worldRank = Number(c.worldRanking) || null;
+
+    const score = c.score !== undefined && c.score !== '' ? (c.score === 'E' ? 0 : Number(c.score)) : null;
+    const madeCut = (c.status && typeof c.status === 'object' && c.status.type && /cut|made/i.test(JSON.stringify(c.status))) || false;
+    const missedCut = (c.status && JSON.stringify(c.status).match(/missed|MC/i)) ? true : false;
+    const withdrew = (c.status && JSON.stringify(c.status).match(/withdraw|WD/i)) ? true : false;
+    const position = (c.status && c.status.position && c.status.position.displayName) || null;
+
+    return {
+      id: a.id || a.displayName,
+      name: a.displayName || a.name || '(unknown)',
+      country: countryAbv || null,
+      flagHref,
+      worldRank,
+      score: Number.isFinite(score) ? score : null,
+      madeCut: madeCut && !missedCut,
+      missedCut,
+      withdrew,
+      position
+    };
+  });
+  return {
+    players, status: (comp.status && comp.status.type && comp.status.type.description) || null,
+    cutLine, venue
+  };
+}
+
+/* Also fetch current OWGR-style rankings to enrich the field when ESPN's
+   per-player rankings are missing. We just take the top-300 from the PGA
+   general leaderboard which includes worldRanking for most events. As a
+   fallback we use the per-player number we already collected. */
+
+/* --------- player categorisation --------- */
+const isHistoricMajorWinner = (name) => {
+  const n = lc(name);
+  return window.HISTORIC_MAJOR_WINNERS.some(w => {
+    const wl = lc(w);
+    if (n === wl) return true;
+    // surname match
+    const surname = wl.split(' ').slice(-1)[0];
+    return n.endsWith(' ' + surname) && n.split(' ').length >= 2;
+  });
+};
+
+const isInternational = (p) => {
+  if (!p.country) return false;
+  const c = p.country.toUpperCase();
+  return c !== 'USA' && c !== 'US' && c !== 'UNITED STATES' && c !== 'U.S.A.' && c !== 'U.S.';
+};
+
+function buildCategories(field, major, year, priorFields) {
+  const top10 = [...field]
+    .filter(p => p.worldRank && p.worldRank > 0)
+    .sort((a,b) => a.worldRank - b.worldRank)
+    .slice(0, 10);
+  const top10Ids = new Set(top10.map(p => p.id));
+
+  const internationals = field
+    .filter(p => isInternational(p) && !top10Ids.has(p.id))
+    .sort((a,b) => (a.worldRank||9999) - (b.worldRank||9999));
+
+  const noMajor = field
+    .filter(p => !isHistoricMajorWinner(p.name))
+    .sort((a,b) => (a.worldRank||9999) - (b.worldRank||9999));
+
+  // First timers
+  const curated = (window.FIRST_TIMERS[major] && window.FIRST_TIMERS[major][year]) || null;
+  let firstTimers;
+  if (curated && curated.length) {
+    const curatedSet = new Set(curated.map(lc));
+    firstTimers = field.filter(p => curatedSet.has(lc(p.name)));
+  } else if (priorFields && Object.keys(priorFields).length) {
+    // heuristic: anyone not in any prior year's field for this major
+    const priorNames = new Set();
+    Object.values(priorFields).forEach(arr => arr.forEach(n => priorNames.add(lc(n))));
+    firstTimers = field.filter(p => !priorNames.has(lc(p.name)));
+  } else {
+    firstTimers = [];
+  }
+  firstTimers = firstTimers.sort((a,b) => (a.worldRank||9999) - (b.worldRank||9999));
+
+  return {
+    top1: top10,
+    top2: top10,
+    intl: internationals,
+    noMajor,
+    firstTimer: firstTimers
+  };
+}
+
+/* --------- small UI atoms --------- */
+const Flag = ({code, href}) => {
+  if (href) return <img src={href} alt="" className="inline-block w-4 h-3 mr-1 rounded-sm object-cover align-middle" />;
+  const em = window.COUNTRY_FLAG(code);
+  return em ? <span className="mr-1 align-middle">{em}</span> : null;
+};
+
+const Header = ({ onHome, rightEl }) => (
+  <header className="hdr-gradient text-white">
+    <div className="max-w-6xl mx-auto px-6 py-5 flex items-center justify-between">
+      <button onClick={onHome} className="flex items-center gap-3 text-left">
+        <span className="text-3xl">⛳</span>
+        <div>
+          <div className="font-serif text-3xl leading-none">Major Pick'em</div>
+          <div className="text-fairway-100 text-xs mt-1">Golf Major Championship Draft</div>
+        </div>
+      </button>
+      <div>{rightEl}</div>
+    </div>
+  </header>
+);
+
+/* --------- Screen: Tournament picker (home) --------- */
+function ScreenHome({ year, setYear, onPickMajor, onOpenAdmin }) {
+  const years = [2024,2025,2026,2027,2028];
+  const majors = Object.values(window.MAJORS);
+  return (
+    <>
+      <Header />
+      <div className="max-w-6xl mx-auto px-6 py-8">
+        <div className="flex items-center justify-between flex-wrap gap-4 mb-6">
+          <h1 className="font-serif text-3xl">{year} Men's Golf Majors</h1>
+          <div className="flex items-center gap-2">
+            {years.map(y => (
+              <button key={y} onClick={()=>setYear(y)}
+                className={cls('pill', y===year && 'active')}>{y}</button>
+            ))}
+            <button onClick={onOpenAdmin} className="pill ml-2">⚙ Admin</button>
+          </div>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+          {majors.map(m => <MajorCard key={m.id} major={m} year={year} onNewGame={()=>onPickMajor(m.id, 'new')} onOpenGame={(id)=>onPickMajor(m.id, id)} />)}
+        </div>
+      </div>
+    </>
+  );
+}
+
+function MajorCard({ major, year, onNewGame, onOpenGame }) {
+  const [games, setGames] = useState([]);
+  useEffect(()=>{ setGames(listGames(major.id, year)); }, [major.id, year]);
+  const venue = major.venues[year] || '';
+  return (
+    <div className="card p-5">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <div className="font-serif text-xl">{major.name}</div>
+          <div className="subtle text-sm">{venue}</div>
+        </div>
+        <button className="btn btn-primary" onClick={onNewGame}>+ New Game</button>
+      </div>
+      <div className="mt-4 space-y-2">
+        {games.length === 0 && <div className="subtle text-sm px-3 py-2">No games started</div>}
+        {games.map(g => (
+          <button key={g.id} onClick={()=>onOpenGame(g.id)}
+            className="w-full flex items-center justify-between bg-fairway-50 hover:bg-fairway-100 rounded-lg px-3 py-2 text-left">
+            <div className="text-sm">
+              <span className="font-medium">{g.users.map(u=>u.name).filter(Boolean).join(', ') || 'Unnamed'}</span>
+            </div>
+            <span className={cls('chip', g.stage==='scoreboard' ? 'bg-fairway-700 text-white' : 'bg-white border border-gray-300 text-gray-700')}>
+              {g.stage==='scoreboard' ? 'Complete' : 'In progress'}
+            </span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* --------- Screen: User Count --------- */
+function ScreenUserCount({ game, setGame, onBack, onNext }) {
+  const major = window.MAJORS[game.major];
+  return (
+    <>
+      <Header rightEl={<button onClick={onBack} className="text-white/90 hover:text-white">← Back to Tournaments</button>} />
+      <div className="max-w-3xl mx-auto px-6 py-14">
+        <div className="card p-8">
+          <div className="font-serif text-3xl">{major.name} {game.year}</div>
+          <div className="subtle mb-6">{major.venues[game.year]}</div>
+          <div className="font-semibold mb-3">How many users are playing?</div>
+          <div className="flex items-stretch gap-0 mb-6 max-w-[240px]">
+            <button onClick={()=>setGame({...game, userCount: Math.max(2, game.userCount - 1)})}
+              className="btn btn-light rounded-r-none text-xl w-14">–</button>
+            <div className="btn btn-light rounded-none border-x-0 w-16 text-xl">{game.userCount}</div>
+            <button onClick={()=>setGame({...game, userCount: Math.min(12, game.userCount + 1)})}
+              className="btn btn-light rounded-l-none text-xl w-14 ring-2 ring-fairway-500">+</button>
+          </div>
+          <button onClick={onNext} className="btn btn-primary w-full py-3">Next: Enter Names</button>
+        </div>
+      </div>
+    </>
+  );
+}
+
+/* --------- Screen: User Names --------- */
+function ScreenUserNames({ game, setGame, onBack, onStart }) {
+  const major = window.MAJORS[game.major];
+  const names = game.users.map(u=>u.name);
+  const allSet = names.every(n => n && n.trim().length);
+  const setName = (i, v) => {
+    const users = game.users.map((u,idx) => idx===i ? {...u, name:v} : u);
+    setGame({...game, users});
+  };
+  return (
+    <>
+      <Header rightEl={<button onClick={onBack} className="text-white/90 hover:text-white">← Back to Tournaments</button>} />
+      <div className="max-w-3xl mx-auto px-6 py-12">
+        <div className="card p-8">
+          <div className="font-serif text-3xl">{major.name} {game.year}</div>
+          <div className="subtle mb-5">{major.venues[game.year]}</div>
+          <div className="font-semibold mb-3">Enter player names</div>
+          <div className="space-y-4 mb-6">
+            {game.users.map((u,i) => (
+              <div key={i}>
+                <label className="text-sm font-medium text-gray-600">Player {i+1}</label>
+                <input type="text" value={u.name} onChange={e=>setName(i, e.target.value)} placeholder={`Player ${i+1}`} />
+              </div>
+            ))}
+          </div>
+          <div className="flex gap-3">
+            <button onClick={onBack} className="btn btn-ghost flex-1">Back</button>
+            <button onClick={onStart} disabled={!allSet}
+              className={cls('btn flex-1', allSet ? 'btn-primary' : 'btn-light')}>
+              Start Draft
+            </button>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
+/* --------- Screen: Draft --------- */
+function ScreenDraft({ game, setGame, onBack, onFinishDraft, onResetDraft, fieldState }) {
+  const major = window.MAJORS[game.major];
+  const cats = fieldState.categories || { top1:[], top2:[], intl:[], noMajor:[], firstTimer:[] };
+  const loading = fieldState.loading;
+  const err = fieldState.error;
+
+  /* Snake draft sequencing */
+  const N = game.users.length;
+  const totalPicks = N * 5;
+  const draftOrder = useMemo(() => {
+    const order = [];
+    for (let r=0; r<5; r++) {
+      const row = Array.from({length:N}, (_,i)=>i);
+      if (r % 2 === 1) row.reverse();
+      row.forEach(u => order.push(u));
+    }
+    return order;
+  }, [N]);
+
+  const picksMade = game.users.reduce((acc,u) => acc + Object.values(u.picks||{}).filter(Boolean).length, 0);
+  const currentUserIdx = picksMade < totalPicks ? draftOrder[picksMade] : null;
+  const currentUser = currentUserIdx !== null ? game.users[currentUserIdx] : null;
+  const pickNum = picksMade + 1;
+
+  /* Set of already-picked player ids across all users (primaries AND alternates) */
+  const alreadyPicked = useMemo(() => {
+    const set = new Set();
+    game.users.forEach(u => {
+      ['top1','top2','intl','noMajor','firstTimer'].forEach(k => { if (u.picks[k]) set.add(u.picks[k].id); });
+      (u.alternates||[]).forEach(a => { if (a) set.add(a.id); });
+    });
+    return set;
+  }, [game]);
+
+  const catDefs = [
+    { key:'top1', title:'Top 10 Pick #1', desc:'A player in the Top 10 of the official world golf rankings' },
+    { key:'top2', title:'Top 10 Pick #2', desc:'A player in the Top 10 of the official world golf rankings' },
+    { key:'intl', title:'International', desc:'An international born player not in the Top 10 of the world ranking' },
+    { key:'noMajor', title:'No Major Wins', desc:'A player that has never won a major' },
+    { key:'firstTimer', title:'First Timer', desc:`A player playing this major for the very first time` },
+  ];
+
+  const [selection, setSelection] = useState({ top1:'', top2:'', intl:'', noMajor:'', firstTimer:'' });
+  useEffect(()=>{ setSelection({ top1:'', top2:'', intl:'', noMajor:'', firstTimer:'' }); }, [currentUserIdx]);
+
+  const makePick = (catKey) => {
+    const pool = cats[catKey] || [];
+    const pid = selection[catKey];
+    if (!pid) return;
+    const player = pool.find(p => String(p.id) === String(pid));
+    if (!player) return;
+    if (currentUser.picks[catKey]) return;
+
+    const users = game.users.map((u,i) => i===currentUserIdx
+      ? { ...u, picks:{ ...u.picks, [catKey]: player } }
+      : u);
+    setGame({ ...game, users });
+  };
+
+  /* Alternates — assigned after the 5 primary picks are done per user */
+  const [altCat, setAltCat] = useState(null);
+  const pickAlternate = (userIdx, pid) => {
+    const pool = fieldState.field || [];
+    const player = pool.find(p => String(p.id) === String(pid));
+    if (!player) return;
+    const users = game.users.map((u,i) => {
+      if (i !== userIdx) return u;
+      const alts = [...(u.alternates||[])];
+      alts.push(player);
+      return { ...u, alternates: alts };
+    });
+    setGame({ ...game, users });
+  };
+
+  const removeAlternate = (userIdx, altIdx) => {
+    const users = game.users.map((u,i) => {
+      if (i !== userIdx) return u;
+      const alts = [...(u.alternates||[])];
+      alts.splice(altIdx, 1);
+      return { ...u, alternates: alts };
+    });
+    setGame({ ...game, users });
+  };
+
+  const draftComplete = picksMade >= totalPicks;
+  const needsAlts = game.users.some(u => (u.alternates||[]).length < 2);
+  const canFinish = draftComplete && !needsAlts;
+
+  return (
+    <>
+      <Header rightEl={<button onClick={onBack} className="text-white/90 hover:text-white">← Back to Tournaments</button>} />
+      <div className="max-w-5xl mx-auto px-6 py-8">
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h1 className="font-serif text-3xl">{major.name} {game.year} — Draft</h1>
+            <div className="subtle text-sm">{major.venues[game.year]}</div>
+          </div>
+          <button onClick={onResetDraft} className="btn btn-danger">Reset Draft</button>
+        </div>
+
+        {loading && <div className="card p-4 mb-4 text-sm">Loading the field from ESPN…</div>}
+        {err && <div className="card p-4 mb-4 text-sm text-red-700 bg-red-50 border-red-200">
+          Couldn't load live field — {err}. You can still draft; players will be entered manually once the field is published.
+        </div>}
+
+        {!draftComplete && currentUser && (
+          <div className="card p-4 mb-4">
+            <div className="font-serif text-xl">{currentUser.name} — Pick {pickNum} of {totalPicks}</div>
+            <div className="subtle text-sm">Select a category and player below</div>
+          </div>
+        )}
+
+        {draftComplete && (
+          <div className="card p-4 mb-4 bg-fairway-50 border-fairway-200">
+            <div className="font-semibold text-fairway-800">All primary picks are in — pick 2 alternates per user to finish.</div>
+          </div>
+        )}
+
+        <div className="space-y-3">
+          {catDefs.map(def => {
+            const pool = cats[def.key] || [];
+            const available = pool.filter(p => !alreadyPicked.has(p.id));
+            const myPick = currentUser?.picks?.[def.key];
+            const isDisabled = !currentUser || !!myPick;
+            return (
+              <div key={def.key} className="card p-4 flex items-center gap-4">
+                <div className="flex-1 min-w-0">
+                  <div className="font-semibold">{def.title}</div>
+                  <div className="subtle text-sm">{def.desc}</div>
+                  {myPick && <div className="mt-1 text-sm text-fairway-700 font-medium">
+                    <Flag code={myPick.country} href={myPick.flagHref}/>{myPick.name} {myPick.worldRank ? <span className="subtle">· #{myPick.worldRank}</span> : null}
+                  </div>}
+                </div>
+                <div className="w-64">
+                  <select disabled={isDisabled || loading}
+                    value={selection[def.key]} onChange={e=>setSelection({...selection, [def.key]: e.target.value})}>
+                    <option value="">Select player…</option>
+                    {available.map(p => (
+                      <option key={p.id} value={p.id}>
+                        {window.COUNTRY_FLAG(p.country)} {p.name}{p.worldRank ? ` (#${p.worldRank})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <button disabled={isDisabled || !selection[def.key]}
+                  onClick={()=>makePick(def.key)}
+                  className={cls('btn', (isDisabled || !selection[def.key]) ? 'btn-light' : 'btn-primary')}>
+                  Pick
+                </button>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Alternates section */}
+        {draftComplete && (
+          <div className="mt-8">
+            <div className="font-serif text-2xl mb-3">Alternates (2 per user)</div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {game.users.map((u,ui) => {
+                const alts = u.alternates || [];
+                const pool = (fieldState.field || []).filter(p => !alreadyPicked.has(p.id));
+                return (
+                  <div key={ui} className="card p-4">
+                    <div className="font-serif text-lg">{u.name}</div>
+                    <div className="subtle text-xs mb-2">Primary team already selected</div>
+                    <div className="space-y-1 mb-3">
+                      {alts.map((a, i) => (
+                        <div key={i} className="flex items-center justify-between bg-fairway-50 rounded px-2 py-1 text-sm">
+                          <span><Flag code={a.country} href={a.flagHref}/>{a.name}{a.worldRank ? <span className="subtle"> · #{a.worldRank}</span> : null}</span>
+                          <button onClick={()=>removeAlternate(ui, i)} className="text-xs text-pin">Remove</button>
+                        </div>
+                      ))}
+                    </div>
+                    {alts.length < 2 && (
+                      <div className="flex gap-2">
+                        <select onChange={e => { if (e.target.value) { pickAlternate(ui, e.target.value); e.target.value=''; } }}>
+                          <option value="">Add alternate…</option>
+                          {pool.map(p => (
+                            <option key={p.id} value={p.id}>
+                              {window.COUNTRY_FLAG(p.country)} {p.name}{p.worldRank ? ` (#${p.worldRank})` : ''}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+            <div className="mt-6 flex justify-end">
+              <button disabled={!canFinish} onClick={onFinishDraft}
+                className={cls('btn', canFinish ? 'btn-primary' : 'btn-light')}>
+                View Scoreboard →
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </>
+  );
+}
+
+/* --------- Scoreboard --------- */
+function computeWinner(users) {
+  // 1. Did anyone pick the tournament winner? Positions come from ESPN like "1" or "T1".
+  const t1 = users.findIndex(u =>
+    ['top1','top2','intl','noMajor','firstTimer'].some(k => {
+      const pk = u.picks[k];
+      if (!pk) return false;
+      const pos = String(pk.position||'').toUpperCase();
+      return pos === '1' || pos === 'T1';
+    })
+  );
+  if (t1 >= 0) return { idx: t1, reason: 'Picked the tournament winner' };
+
+  // 2. Most cuts made
+  const cuts = users.map(u =>
+    ['top1','top2','intl','noMajor','firstTimer'].filter(k => u.picks[k] && u.picks[k].madeCut).length
+  );
+  const maxCuts = Math.max(...cuts);
+  if (maxCuts > 0 || cuts.every(c => c === 0)) {
+    const leaders = users.map((_,i)=>i).filter(i => cuts[i] === maxCuts);
+    if (leaders.length === 1) return { idx: leaders[0], reason: `Most players made the cut (${maxCuts}/5)` };
+    // 3. Tie-breaker: lowest cumulative score among tied
+    let best = null, bestScore = Infinity;
+    leaders.forEach(i => {
+      const score = ['top1','top2','intl','noMajor','firstTimer']
+        .reduce((s,k) => s + (users[i].picks[k]?.score ?? 0), 0);
+      if (score < bestScore) { bestScore = score; best = i; }
+    });
+    if (best !== null) return { idx: best, reason: `Lowest cumulative score (${fmtScore(bestScore)})` };
+  }
+  return null;
+}
+
+function teamScore(user) {
+  return ['top1','top2','intl','noMajor','firstTimer']
+    .reduce((s,k) => s + (user.picks[k]?.score ?? 0), 0);
+}
+function teamCuts(user) {
+  return ['top1','top2','intl','noMajor','firstTimer']
+    .filter(k => user.picks[k] && user.picks[k].madeCut).length;
+}
+
+function ScreenScoreboard({ game, setGame, onBack, onSync, onShare, syncState, winner }) {
+  const major = window.MAJORS[game.major];
+  const catDefs = [
+    { key:'top1', title:'Top 10 Pick #1' },
+    { key:'top2', title:'Top 10 Pick #2' },
+    { key:'intl', title:'International' },
+    { key:'noMajor', title:'No Major Wins' },
+    { key:'firstTimer', title:'First Timer' },
+  ];
+
+  const swapWithAlt = (userIdx, catKey, altIdx) => {
+    const users = game.users.map((u,i) => {
+      if (i !== userIdx) return u;
+      const primary = u.picks[catKey];
+      const alts = [...(u.alternates||[])];
+      const alt = alts[altIdx];
+      if (!primary || !alt) return u;
+      alts[altIdx] = primary;
+      return { ...u, picks: { ...u.picks, [catKey]: alt }, alternates: alts };
+    });
+    setGame({ ...game, users });
+  };
+
+  return (
+    <>
+      <Header rightEl={<button onClick={onBack} className="text-white/90 hover:text-white">← Back to Tournaments</button>} />
+      <div className="max-w-6xl mx-auto px-6 py-8">
+        <div className="flex items-start justify-between mb-4 flex-wrap gap-3">
+          <div>
+            <h1 className="font-serif text-3xl">{major.name} {game.year} — Scoreboard</h1>
+            <div className="subtle text-sm">{major.venues[game.year]}</div>
+          </div>
+          <div className="flex gap-2">
+            <button onClick={onSync} disabled={syncState.loading}
+              className={cls('btn', syncState.loading ? 'btn-light' : 'btn-primary')}>
+              {syncState.loading ? '…Syncing' : '+ Sync Scores'}
+            </button>
+            <button onClick={onSync} disabled={syncState.loading} className="btn btn-ghost">Update Scores</button>
+            <button onClick={onShare} className="btn btn-ghost">Share Link</button>
+            <button onClick={()=>setGame({...game, stage:'draft'})} className="btn btn-ghost">View Draft</button>
+          </div>
+        </div>
+
+        {syncState.error && <div className="card p-3 mb-3 text-sm text-red-700 bg-red-50 border-red-200">{syncState.error}</div>}
+        {syncState.message && <div className="card p-3 mb-3 text-sm bg-fairway-50 border-fairway-200">{syncState.message}</div>}
+
+        {winner && (
+          <div className="card p-3 mb-4 bg-fairway-50 border-fairway-200 text-center">
+            <span className="font-serif text-lg text-fairway-800">🏆 {game.users[winner.idx].name} wins — {winner.reason}</span>
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+          {game.users.map((u, ui) => {
+            const ts = teamScore(u);
+            const tc = teamCuts(u);
+            const isWinner = winner && winner.idx === ui;
+            return (
+              <div key={ui} className={cls('card p-5', isWinner && 'winner-glow')}>
+                {isWinner && <div className="mb-2"><span className="chip chip-winner">🏆 Winner</span></div>}
+                <div className="flex items-baseline justify-between mb-3">
+                  <div className="font-serif text-2xl">{u.name}</div>
+                  <div className="text-right">
+                    <div className={cls('text-2xl font-bold', scoreClass(ts))}>{fmtScore(ts)}</div>
+                    <div className="subtle text-xs">{tc}/5 made cut</div>
+                  </div>
+                </div>
+                <div className="text-xs subtle grid grid-cols-[1.4fr_1fr_auto_auto_1fr] gap-2 px-1">
+                  <div>Player</div><div>Category</div><div>Score</div><div>Cut</div><div className="text-right">Sub</div>
+                </div>
+                <div className="mt-1">
+                  {catDefs.map(def => {
+                    const p = u.picks[def.key];
+                    return (
+                      <div key={def.key} className="tbl-row grid grid-cols-[1.4fr_1fr_auto_auto_1fr] gap-2 items-center py-2">
+                        <div className="truncate">{p ? <><Flag code={p.country} href={p.flagHref}/><b>{p.name}</b></> : <span className="subtle">—</span>}</div>
+                        <div className="subtle text-sm">{def.title}</div>
+                        <div className={scoreClass(p?.score ?? null)}>{p ? fmtScore(p.score) : '—'}</div>
+                        <div className="text-center">{p ? (p.madeCut ? <span className="tick">✓</span> : <span className="dash">—</span>) : ''}</div>
+                        <div className="flex justify-end">
+                          {p && (u.alternates||[]).length > 0 && (
+                            <select onChange={e => { if (e.target.value !== '') { swapWithAlt(ui, def.key, Number(e.target.value)); e.target.value=''; } }}>
+                              <option value="">Swap</option>
+                              {(u.alternates||[]).map((a,ai) => <option key={ai} value={ai}>↔ {a.name}</option>)}
+                            </select>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                {(u.alternates||[]).length > 0 && (
+                  <div className="mt-4 pt-3 border-t">
+                    <div className="text-sm font-semibold">Alternates <span className="subtle font-normal">(not counted in team score)</span></div>
+                    <div className="mt-1">
+                      {(u.alternates||[]).map((a,i) => (
+                        <div key={i} className="flex items-center justify-between text-sm py-1">
+                          <div><Flag code={a.country} href={a.flagHref}/>{a.name}</div>
+                          <div className="flex items-center gap-3">
+                            <span className={scoreClass(a.score ?? null)}>{fmtScore(a.score)}</span>
+                            <span className="w-4 text-center">{a.madeCut ? <span className="tick">✓</span> : <span className="dash">—</span>}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="card p-4 mt-6">
+          <div className="font-semibold mb-1">Winning Rules</div>
+          <div className="text-sm subtle space-y-0.5">
+            <div>· Picking the tournament winner automatically wins the pick'em</div>
+            <div>· If no one picks the winner, the user with the most players making the 36-hole cut wins</div>
+            <div>· If users have the same number of players making the cut, lowest cumulative team score wins</div>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
+/* --------- Admin --------- */
+function ScreenAdmin({ onBack }) {
+  const all = readAllGames();
+  const entries = Object.values(all).sort((a,b)=>(b.savedAt||0)-(a.savedAt||0));
+  const [nonce, setNonce] = useState(0);
+  return (
+    <>
+      <Header rightEl={<button onClick={onBack} className="text-white/90 hover:text-white">← Back to Tournaments</button>} />
+      <div className="max-w-4xl mx-auto px-6 py-8">
+        <h1 className="font-serif text-3xl mb-4">Admin — Saved Games</h1>
+        <div className="card p-4 mb-4 text-sm subtle">Games you start in this browser are saved here so you can resume them. Anyone who has your shared link can view the game — their copy is read-only and loaded from the URL.</div>
+        <div className="space-y-2">
+          {entries.length === 0 && <div className="subtle">No saved games yet.</div>}
+          {entries.map(g => (
+            <div key={g.id} className="card p-3 flex items-center justify-between gap-4">
+              <div>
+                <div className="font-medium">{window.MAJORS[g.major].name} {g.year}</div>
+                <div className="subtle text-xs">{g.users.map(u=>u.name).filter(Boolean).join(', ')} · {g.stage}</div>
+              </div>
+              <div className="flex gap-2">
+                <button onClick={()=>{
+                  if (confirm('Delete this game?')) { deleteGame(g.id); setNonce(n=>n+1); }
+                }} className="btn btn-danger">Delete</button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </>
+  );
+}
+
+/* --------- Root App --------- */
+function App() {
+  /* URL hash: #g=<compressed game state> — shared view
+     Otherwise: standard navigation using local state */
+  const [year, setYear] = useState(2026);
+  const [view, setView] = useState('home'); // home|userCount|userNames|draft|scoreboard|admin|shared
+  const [game, setGame] = useState(null);
+  const [fieldState, setFieldState] = useState({ loading:false, field:[], categories:null, error:null, venue:null, status:null });
+  const [syncState, setSyncState] = useState({ loading:false, error:null, message:null });
+  const [readOnly, setReadOnly] = useState(false);
+
+  /* On first load — decode shared-URL state */
+  useEffect(() => {
+    const hash = window.location.hash || '';
+    const m = hash.match(/g=([^&]+)/);
+    if (m) {
+      const state = decodeState(m[1]);
+      if (state && state.major && state.users) {
+        setGame(state);
+        setView('scoreboard');
+        setReadOnly(true);
+      }
+    }
+  }, []);
+
+  /* Persist game to localStorage whenever it changes (only for owner, not read-only viewer) */
+  useEffect(() => {
+    if (game && !readOnly) saveGame(game);
+  }, [game, readOnly]);
+
+  /* Load field from ESPN whenever we're on the draft screen (or scoreboard when syncing). */
+  const loadField = useCallback(async (majorId, yr) => {
+    const major = window.MAJORS[majorId];
+    if (!major) return;
+    setFieldState(fs => ({ ...fs, loading:true, error:null }));
+    try {
+      const json = await fetchEspnLeaderboard(major.espnLeague, yr);
+      const parsed = parseEspnField(json);
+      // assign world ranks fallback: if no rank, put 9999
+      const field = parsed.players.map(p => ({ ...p, worldRank: p.worldRank || null }));
+      const categories = buildCategories(field, majorId, yr, {});
+      setFieldState({ loading:false, field, categories, error:null, venue:parsed.venue, status:parsed.status, cutLine:parsed.cutLine });
+    } catch (e) {
+      setFieldState({ loading:false, field:[], categories:null, error:e.message, venue:null, status:null });
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!game) return;
+    if (view === 'draft' && (!fieldState.field || fieldState.field.length === 0)) {
+      loadField(game.major, game.year);
+    }
+  }, [view, game, fieldState.field, loadField]);
+
+  /* Handlers */
+  const openHome = () => { setView('home'); setGame(null); setReadOnly(false); window.location.hash = ''; };
+
+  const onPickMajor = (majorId, which) => {
+    if (which === 'new') {
+      const newGame = {
+        id: uid(), major: majorId, year,
+        userCount: 3,
+        users: [0,1,2].map(i => ({ name:'', picks:{}, alternates:[] })),
+        stage:'userCount',
+        createdAt: Date.now(),
+      };
+      setGame(newGame);
+      setView('userCount');
+    } else {
+      const g = loadGame(which);
+      if (g) {
+        setGame(g);
+        setView(g.stage === 'scoreboard' ? 'scoreboard' : (g.stage === 'draft' ? 'draft' : 'userNames'));
+      }
+    }
+  };
+
+  const goUserNames = () => {
+    const users = Array.from({length: game.userCount}, (_,i) =>
+      game.users[i] || { name:'', picks:{}, alternates:[] });
+    setGame({ ...game, users, stage:'userNames' });
+    setView('userNames');
+  };
+
+  const goStartDraft = () => {
+    setGame({ ...game, stage:'draft' });
+    setView('draft');
+  };
+
+  const finishDraft = () => {
+    setGame(g => ({ ...g, stage:'scoreboard' }));
+    setView('scoreboard');
+  };
+
+  const resetDraft = () => {
+    if (!confirm('Reset the draft? All picks and alternates will be cleared.')) return;
+    setGame(g => ({ ...g, users: g.users.map(u => ({ ...u, picks:{}, alternates:[] })), stage:'draft' }));
+  };
+
+  /* Score sync */
+  const syncScores = async () => {
+    setSyncState({ loading:true, error:null, message:null });
+    try {
+      const major = window.MAJORS[game.major];
+      const json = await fetchEspnLeaderboard(major.espnLeague, game.year);
+      const parsed = parseEspnField(json);
+      const byId = new Map(parsed.players.map(p => [String(p.id), p]));
+      const byName = new Map(parsed.players.map(p => [lc(p.name), p]));
+      const enrich = (p) => {
+        if (!p) return p;
+        const match = byId.get(String(p.id)) || byName.get(lc(p.name));
+        if (!match) return p;
+        return { ...p, score: match.score, madeCut: match.madeCut, missedCut: match.missedCut, withdrew: match.withdrew, position: match.position, flagHref: match.flagHref || p.flagHref, country: p.country || match.country };
+      };
+      const users = game.users.map(u => ({
+        ...u,
+        picks: Object.fromEntries(Object.entries(u.picks).map(([k,v]) => [k, enrich(v)])),
+        alternates: (u.alternates||[]).map(enrich),
+      }));
+      let synced = 0;
+      users.forEach(u => { Object.values(u.picks).forEach(p => { if (p && Number.isFinite(p.score)) synced++; }); (u.alternates||[]).forEach(p => { if (p && Number.isFinite(p.score)) synced++; }); });
+      setGame({ ...game, users });
+      setSyncState({ loading:false, error:null, message:`${major.shortName} scores synced. ${synced} player score${synced===1?'':'s'} updated. Cut status refreshed.` });
+    } catch (e) {
+      setSyncState({ loading:false, error:`Couldn't sync from ESPN: ${e.message}`, message:null });
+    }
+  };
+
+  /* Share link */
+  const onShare = async () => {
+    const payload = { ...game, shared:true };
+    const hash = 'g=' + encodeState(payload);
+    const full = `${window.location.origin}${window.location.pathname}#${hash}`;
+    let short = full;
+    try {
+      const res = await fetch('https://is.gd/create.php?format=simple&url=' + encodeURIComponent(full));
+      if (res.ok) {
+        const txt = (await res.text()).trim();
+        if (txt && /^https?:\/\//.test(txt)) short = txt;
+      }
+    } catch(e) { /* fall back to full link */ }
+    try { await navigator.clipboard.writeText(short); } catch(e) {}
+    prompt('Share this link with your players (copied to clipboard):', short);
+  };
+
+  const winner = game && game.stage === 'scoreboard' ? computeWinner(game.users) : null;
+
+  /* Render router */
+  if (view === 'admin') return <ScreenAdmin onBack={openHome} />;
+  if (view === 'home' || !game) return <ScreenHome year={year} setYear={setYear} onPickMajor={onPickMajor} onOpenAdmin={()=>setView('admin')} />;
+  if (view === 'userCount') return <ScreenUserCount game={game} setGame={setGame} onBack={openHome} onNext={goUserNames} />;
+  if (view === 'userNames') return <ScreenUserNames game={game} setGame={setGame} onBack={openHome} onStart={goStartDraft} />;
+  if (view === 'draft')     return <ScreenDraft game={game} setGame={setGame} onBack={openHome} onFinishDraft={finishDraft} onResetDraft={resetDraft} fieldState={fieldState} />;
+  if (view === 'scoreboard')return <ScreenScoreboard game={game} setGame={setGame} onBack={openHome} onSync={syncScores} onShare={onShare} syncState={syncState} winner={winner} />;
+  return <ScreenHome year={year} setYear={setYear} onPickMajor={onPickMajor} onOpenAdmin={()=>setView('admin')} />;
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
